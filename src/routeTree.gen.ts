@@ -9,9 +9,15 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as FactoryRouteImport } from './routes/factory'
 import { Route as ApiListingRouteImport } from './routes/api/listing'
 
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FactoryRoute = FactoryRouteImport.update({
   id: '/factory',
   path: '/factory',
@@ -24,33 +30,44 @@ const ApiListingRoute = ApiListingRouteImport.update({
 } as any)
 
 export interface FileRoutesByFullPath {
+  '/': typeof IndexRoute
   '/factory': typeof FactoryRoute
   '/api/listing': typeof ApiListingRoute
 }
 export interface FileRoutesByTo {
+  '/': typeof IndexRoute
   '/factory': typeof FactoryRoute
   '/api/listing': typeof ApiListingRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
   '/factory': typeof FactoryRoute
   '/api/listing': typeof ApiListingRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/factory' | '/api/listing'
+  fullPaths: '/' | '/factory' | '/api/listing'
   fileRoutesByTo: FileRoutesByTo
-  to: '/factory' | '/api/listing'
-  id: '__root__' | '/factory' | '/api/listing'
+  to: '/' | '/factory' | '/api/listing'
+  id: '__root__' | '/' | '/factory' | '/api/listing'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
+  IndexRoute: typeof IndexRoute
   FactoryRoute: typeof FactoryRoute
   ApiListingRoute: typeof ApiListingRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/factory': {
       id: '/factory'
       path: '/factory'
@@ -69,6 +86,7 @@ declare module '@tanstack/react-router' {
 }
 
 const rootRouteChildren: RootRouteChildren = {
+  IndexRoute: IndexRoute,
   FactoryRoute: FactoryRoute,
   ApiListingRoute: ApiListingRoute,
 }
