@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/factory")({
   head: () => ({
     meta: [
       { title: "Prompt Factory — AI Prompt Generator" },
@@ -12,7 +12,7 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary" },
     ],
   }),
-  component: Index,
+  component: Factory,
 });
 
 const environments = [
@@ -54,7 +54,7 @@ const themes: Record<string, { label: string; subjects: string[]; styles: string
 
 const pick = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
 
-function Index() {
+function Factory() {
   const [theme, setTheme] = useState("all");
   const [prompt, setPrompt] = useState("");
   const [history, setHistory] = useState<string[]>([]);
@@ -76,6 +76,7 @@ function Index() {
 
   return (
     <main className="min-h-screen bg-background px-5 py-12 text-foreground">
+      <a href="/" className="mx-auto mb-6 block max-w-xl font-mono text-xs text-primary">← Listing Generator</a>
       <div className="mx-auto max-w-xl">
         <p className="font-mono text-xs uppercase tracking-[0.3em] text-primary">PromptBase toolkit</p>
         <h1 className="mt-2 text-5xl font-black tracking-tight">Prompt Factory</h1>
