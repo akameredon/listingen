@@ -61,7 +61,7 @@ function Index() {
   const [copied, setCopied] = useState(false);
 
   const generate = () => {
-    const t = themes[theme];
+    const t = themes[theme] ?? themes.all!;
     const p = `${pick(t.subjects)}, ${pick(t.styles)}, ${pick(environments)}, ${pick(details)} --v 6.0`;
     setPrompt(p);
     setCopied(false);
