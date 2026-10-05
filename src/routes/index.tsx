@@ -112,7 +112,15 @@ function Index() {
         body: JSON.stringify(v),
         signal: ctrl.signal,
       });
-      if (!res.ok || !res.body) throw new Error((await res.text()) || "Something went wrong.");
+      if (!res.ok || !res.body) {
+        const raw = (await res.text().catch(() => "")).trim();
+        const looksHtml = raw.startsWith("<") || raw.length > 300;
+        throw new Error(
+          looksHtml || !raw
+            ? "The server was briefly unavailable. Please press Try again in a few seconds."
+            : raw,
+        );
+      }
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       for (;;) {
