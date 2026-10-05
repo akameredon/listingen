@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { listingInputSchema } from "@/lib/listing";
 import { SYSTEM_PROMPT, buildUserMessage } from "@/lib/listing-prompt.server";
 
-const MODEL = "gemini-2.5-flash";
+const MODEL = "gemini-3.8-flash";
 
 export const Route = createFileRoute("/api/listing")({
   server: {
