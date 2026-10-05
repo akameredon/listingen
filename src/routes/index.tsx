@@ -1,13 +1,29 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { Check, Copy, Loader2, Sparkles, ArrowLeft, ArrowRight, RotateCcw } from "lucide-react";
+import {
+  STEPS,
+  SECTION_TITLES,
+  emptyInput,
+  splitSections,
+  type Field,
+  type ListingInput,
+} from "@/lib/listing";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Prompt Factory — AI Prompt Generator" },
-      { name: "description", content: "Generate unique AI image prompts to test and sell on PromptBase." },
-      { property: "og:title", content: "Prompt Factory — AI Prompt Generator" },
-      { property: "og:description", content: "Generate unique AI image prompts to test and sell on PromptBase." },
+      { title: "PromptBase Pro Listing Generator — Guideline-Compliant Listings" },
+      {
+        name: "description",
+        content:
+          "Turn a rough idea into a complete PromptBase listing: title, description, prompt template, examples, price, tags, SEO and a decline-risk checklist.",
+      },
+      { property: "og:title", content: "PromptBase Pro Listing Generator" },
+      {
+        property: "og:description",
+        content: "Answer a few guided questions and get a copy-paste-ready, guideline-compliant PromptBase listing.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -15,117 +31,242 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-const environments = [
-  "floating in deep neon space",
-  "hidden inside a glowing mystical forest",
-  "navigating a rainy Tokyo street at midnight",
-  "perched on top of a candy cloud",
-  "submerged in a sunken high-tech city",
-];
-const details = [
-  "cinematic dramatic lighting, 8k resolution",
-  "pastel color palette, intricate details",
-  "sharp focus, volumetric fog, trending on ArtStation",
-  "vivid colors, masterpiece, award-winning composition",
-];
+const inputCls =
+  "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-ring/30";
 
-const themes: Record<string, { label: string; subjects: string[]; styles: string[] }> = {
-  all: {
-    label: "Random mix",
-    subjects: ["An astronaut kitten", "A legendary cybernetic samurai", "A tiny dragon holding a coffee cup", "A floating steampunk island", "A futuristic racing car", "An ancient wizard owl"],
-    styles: ["3D Pixar cartoon style", "80s retro neon cyberpunk", "Ethereal watercolor painting", "Hyper-realistic Unreal Engine 5 render", "Vibrant claymation style", "Minimalist vector line art"],
-  },
-  cyber: {
-    label: "Cyberpunk",
-    subjects: ["A cybernetic ninja", "A rogue AI robot", "A futuristic hover-bike racer", "A hacker raccoon"],
-    styles: ["80s retro neon cyberpunk style", "gritty dystopian sci-fi cinema style"],
-  },
-  fantasy: {
-    label: "Fantasy",
-    subjects: ["A majestic forest elf", "A phoenix rising from ash", "A secret potion shop", "A crystal golem"],
-    styles: ["Ethereal magical fantasy illustration", "classic oil painting style"],
-  },
-  cute: {
-    label: "Cute 3D",
-    subjects: ["A chubby baby penguin", "A smiling little cloud creature", "A tiny puppy wearing a wizard hat"],
-    styles: ["3D cute Pixar animation style", "soft squishy claymation render"],
-  },
-};
+function FieldInput({
+  f,
+  value,
+  onChange,
+}: {
+  f: Field;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  if (f.kind === "select")
+    return (
+      <select className={inputCls} value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">Choose…</option>
+        {f.options?.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+    );
+  if (f.kind === "short")
+    return (
+      <input className={inputCls} value={value} placeholder={f.placeholder} onChange={(e) => onChange(e.target.value)} />
+    );
+  return (
+    <textarea
+      className={`${inputCls} min-h-28 resize-y`}
+      value={value}
+      placeholder={f.placeholder}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+}
 
-const pick = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
+function CopyBtn({ text, label = "Copy" }: { text: string; label?: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      onClick={async () => {
+        await navigator.clipboard.writeText(text);
+        setDone(true);
+        setTimeout(() => setDone(false), 1500);
+      }}
+      className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:opacity-90"
+    >
+      {done ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+      {done ? "Copied" : label}
+    </button>
+  );
+}
 
 function Index() {
-  const [theme, setTheme] = useState("all");
-  const [prompt, setPrompt] = useState("");
-  const [history, setHistory] = useState<string[]>([]);
-  const [copied, setCopied] = useState(false);
+  const [step, setStep] = useState(0);
+  const [v, setV] = useState<ListingInput>(emptyInput);
+  const [output, setOutput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [phase, setPhase] = useState<"form" | "result">("form");
+  const abortRef = useRef<AbortController | null>(null);
 
-  const generate = () => {
-    const t = themes[theme] ?? themes["all"]!;
-    const p = `${pick(t.subjects)}, ${pick(t.styles)}, ${pick(environments)}, ${pick(details)} --v 6.0`;
-    setPrompt(p);
-    setCopied(false);
-    setHistory((h) => [p, ...h].slice(0, 8));
+  const current = STEPS[step]!;
+  const visible = current.fields.filter((f) => !f.showIf || f.showIf(v));
+  const valid = visible.every((f) => !f.required || v[f.key].trim());
+
+  const generate = async () => {
+    setPhase("result");
+    setOutput("");
+    setError("");
+    setLoading(true);
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    try {
+      const res = await fetch("/api/listing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(v),
+        signal: ctrl.signal,
+      });
+      if (!res.ok || !res.body) throw new Error((await res.text()) || "Something went wrong.");
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        setOutput((o) => o + dec.decode(value, { stream: true }));
+      }
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const copy = async (text: string) => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
+  const sections = useMemo(() => splitSections(output), [output]);
 
   return (
-    <main className="min-h-screen bg-background px-5 py-12 text-foreground">
-      <div className="mx-auto max-w-xl">
-        <p className="font-mono text-xs uppercase tracking-[0.3em] text-primary">PromptBase toolkit</p>
-        <h1 className="mt-2 text-5xl font-black tracking-tight">Prompt Factory</h1>
-        <p className="mt-3 text-muted-foreground">Mix subjects, styles and scenes into ready-to-test AI prompts.</p>
+    <main className="min-h-screen bg-background px-4 py-10 text-foreground sm:px-6">
+      <div className="mx-auto max-w-2xl">
+        <p className="font-mono text-xs uppercase tracking-[0.3em] text-primary">PromptBase seller tool</p>
+        <h1 className="mt-2 text-4xl font-black tracking-tight sm:text-5xl">Listing Generator</h1>
+        <p className="mt-3 text-muted-foreground">
+          Answer a few guided questions. Get a complete, guideline-compliant listing you can paste into PromptBase in
+          under two minutes.
+        </p>
 
-        <div className="mt-8 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {Object.entries(themes).map(([k, v]) => (
-            <button
-              key={k}
-              onClick={() => setTheme(k)}
-              className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${theme === k ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:border-primary"}`}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
+        {phase === "form" && (
+          <section className="mt-8">
+            <div className="flex gap-1.5">
+              {STEPS.map((s, i) => (
+                <button
+                  key={s.title}
+                  aria-label={`Step ${i + 1}: ${s.title}`}
+                  onClick={() => i < step && setStep(i)}
+                  className={`h-1.5 flex-1 rounded-full transition ${i <= step ? "bg-primary" : "bg-muted"}`}
+                />
+              ))}
+            </div>
+            <p className="mt-4 font-mono text-xs uppercase tracking-widest text-muted-foreground">
+              Step {step + 1} of {STEPS.length} · {current.blurb}
+            </p>
+            <h2 className="mt-1 text-2xl font-bold">{current.title}</h2>
 
-        <button
-          onClick={generate}
-          className="mt-4 w-full rounded-lg bg-accent py-4 text-lg font-black text-accent-foreground transition hover:opacity-90 active:scale-[0.99]"
-        >
-          Generate prompt
-        </button>
+            <div className="mt-5 space-y-5 rounded-xl border border-border bg-card p-5">
+              {visible.map((f) => (
+                <div key={f.key}>
+                  <label className="mb-2 block text-sm font-medium">
+                    {f.label}
+                    {f.required && <span className="ml-1 text-accent">*</span>}
+                  </label>
+                  <FieldInput f={f} value={v[f.key]} onChange={(val) => setV((p) => ({ ...p, [f.key]: val }))} />
+                </div>
+              ))}
+            </div>
 
-        {prompt && (
-          <div className="mt-6 rounded-xl border border-primary/40 bg-card p-5">
-            <p className="font-mono text-sm leading-relaxed">{prompt}</p>
-            <button onClick={() => copy(prompt)} className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
-              {copied ? "Copied!" : "Copy prompt"}
-            </button>
-          </div>
+            <div className="mt-5 flex items-center justify-between">
+              <button
+                disabled={step === 0}
+                onClick={() => setStep((s) => s - 1)}
+                className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-semibold transition hover:border-primary disabled:opacity-30"
+              >
+                <ArrowLeft className="size-4" /> Back
+              </button>
+              {step < STEPS.length - 1 ? (
+                <button
+                  disabled={!valid}
+                  onClick={() => setStep((s) => s + 1)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
+                >
+                  Next <ArrowRight className="size-4" />
+                </button>
+              ) : (
+                <button
+                  disabled={!valid}
+                  onClick={generate}
+                  className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-black text-accent-foreground transition hover:opacity-90 disabled:opacity-40"
+                >
+                  <Sparkles className="size-4" /> Generate listing
+                </button>
+              )}
+            </div>
+          </section>
         )}
 
-        {history.length > 1 && (
+        {phase === "result" && (
           <section className="mt-8">
-            <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Recent</h2>
-            <ul className="mt-3 space-y-2">
-              {history.slice(1).map((h, i) => (
-                <li key={i}>
-                  <button onClick={() => copy(h)} className="w-full rounded-md border border-border bg-card p-3 text-left font-mono text-xs text-muted-foreground hover:text-foreground">
-                    {h}
-                  </button>
-                </li>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-2xl font-bold">Your listing</h2>
+              <div className="flex gap-2">
+                {output && !loading && <CopyBtn text={output} label="Copy all" />}
+                <button
+                  onClick={() => {
+                    abortRef.current?.abort();
+                    setPhase("form");
+                    setLoading(false);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-semibold hover:border-primary"
+                >
+                  <RotateCcw className="size-3.5" /> Edit answers
+                </button>
+              </div>
+            </div>
+
+            {loading && (
+              <p className="mt-4 inline-flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" /> Writing your listing…
+              </p>
+            )}
+
+            {error && (
+              <div className="mt-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm">
+                <p className="font-semibold">Couldn't generate the listing</p>
+                <p className="mt-1 text-muted-foreground">{error}</p>
+                <button
+                  onClick={generate}
+                  className="mt-3 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+
+            <div className="mt-5 space-y-4">
+              {sections.map((s) => (
+                <article key={s.n} className="rounded-xl border border-border bg-card p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-primary">
+                      {s.n}. {SECTION_TITLES[s.n - 1] ?? s.heading}
+                    </h3>
+                    <CopyBtn text={s.body} />
+                  </div>
+                  <div className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/90">
+                    {s.body}
+                  </div>
+                </article>
               ))}
-            </ul>
+            </div>
+
+            {!loading && output && (
+              <button
+                onClick={generate}
+                className="mt-6 inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-semibold hover:border-primary"
+              >
+                <Sparkles className="size-4" /> Regenerate
+              </button>
+            )}
           </section>
         )}
 
         <p className="mt-10 rounded-lg border border-border p-4 text-xs text-muted-foreground">
           Reminder: PromptBase requires you to test every prompt in an AI tool and upload real results before selling.
+          <a href="/factory" className="ml-1 text-primary underline">
+            Need quick image-prompt ideas? Try the Prompt Factory.
+          </a>
         </p>
       </div>
     </main>
