@@ -14,7 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      listings: {
+        Row: {
+          batch_id: string | null
+          created_at: string
+          id: string
+          idea: string
+          input: Json
+          output: string
+          score: number | null
+          score_report: Json | null
+          status: string
+          template: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          batch_id?: string | null
+          created_at?: string
+          id?: string
+          idea?: string
+          input?: Json
+          output?: string
+          score?: number | null
+          score_report?: Json | null
+          status?: string
+          template?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          batch_id?: string | null
+          created_at?: string
+          id?: string
+          idea?: string
+          input?: Json
+          output?: string
+          score?: number | null
+          score_report?: Json | null
+          status?: string
+          template?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
