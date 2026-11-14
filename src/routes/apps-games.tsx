@@ -1,7 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowLeft, Copy, Loader2, Sparkles } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";\nimport { savePromptPackage } from "@/lib/marketplace-client";\nimport type { Json } from "@/integrations/supabase/types";
+import { supabase } from "@/integrations/supabase/client";
+import { savePromptPackage } from "@/lib/marketplace-client";
+import type { Json } from "@/integrations/supabase/types";
 import { emptyAppsGamesInput, type AppsGamesInput } from "@/lib/apps-games";
 
 export const Route = createFileRoute("/apps-games")({
@@ -22,7 +24,9 @@ function AppsGamesPage() {
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);\n  const [saving, setSaving] = useState(false);\n  const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const set = <K extends keyof AppsGamesInput>(key: K, value: AppsGamesInput[K]) => setV((old) => ({ ...old, [key]: value }));
 
   async function generate() {
