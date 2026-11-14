@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  createProductFromListing, createProductVersion, duplicateListingDraft, getMyListings, getMyProducts, submitProductForReview, updateListingDraft,
+  createProductFromListing, createProductVersion, duplicateListingDraft, getMyListings, getMyProducts, submitProductForReview, updateListingDraft, updateProductDetails,
   type ListingRow, type ProductRow,
 } from "@/lib/marketplace-client";
 
@@ -49,6 +49,14 @@ function CreatorStudio() {
   const [draftOutput,setDraftOutput] = useState("");
   const [draftFolder,setDraftFolder] = useState("Uncategorized");
   const [draftTags,setDraftTags] = useState("");
+  const [editingProductId,setEditingProductId] = useState<string|null>(null);
+  const [productTitle,setProductTitle] = useState("");
+  const [productSummary,setProductSummary] = useState("");
+  const [productDescription,setProductDescription] = useState("");
+  const [productPrice,setProductPrice] = useState("");
+  const [productCategory,setProductCategory] = useState(categories[0]!);
+  const [productCurrency,setProductCurrency] = useState("USD");
+  const [productTags,setProductTags] = useState("");
 
   async function refresh() {
     setLoading(true); setError("");
@@ -202,6 +210,22 @@ function CreatorStudio() {
     catch(e){setError(e instanceof Error?e.message:"Could not duplicate draft.");}
   }
 
+  function beginEditProduct(product:ProductRow){
+    setEditingProductId(product.id);setProductTitle(product.title);setProductSummary(product.short_description);
+    setProductDescription(product.description);setProductPrice((product.price_amount/100).toFixed(2));
+    setProductCategory(product.category);setProductCurrency(product.currency);setProductTags(product.tags.join(", "));
+  }
+
+  async function saveProductDetails(product:ProductRow){
+    setError("");setNotice("");
+    const amount=Number(productPrice);
+    if(!Number.isFinite(amount)||amount<0){setError("Enter a valid product price.");return;}
+    try{
+      await updateProductDetails({productId:product.id,title:productTitle,shortDescription:productSummary,description:productDescription,category:productCategory,priceAmount:Math.round(amount*100),currency:productCurrency,tags:productTags.split(",").map(t=>t.trim()).filter(Boolean)});
+      setEditingProductId(null);setNotice("Product details saved as a draft. Submit it for review before republishing.");await refresh();
+    }catch(e){setError(e instanceof Error?e.message:"Could not update product details.");}
+  }
+
   function beginNewVersion(product:ProductRow){
     const current=versionHistory[product.id]?.[0];
     setEditingVersion(product.id);
@@ -317,13 +341,21 @@ function CreatorStudio() {
         <section className="mt-10"><h2 className="text-xl font-bold">Marketplace products</h2><p className="mt-1 text-sm text-muted-foreground">Every product moves through draft, review and publication. Saving or submitting never publishes automatically.</p>
           {products.length===0 ? <p className="mt-4 rounded-xl border border-border p-5 text-sm text-muted-foreground">No products yet. Prepare a product from one of your saved prompts above.</p> : <div className="mt-4 grid gap-3 md:grid-cols-2">{products.map(product=><article key={product.id} className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-start justify-between gap-3"><div><h3 className="font-bold">{product.title}</h3><p className="mt-1 text-sm text-muted-foreground">{product.category} · {(product.price_amount/100).toFixed(2)} {product.currency}</p></div><span className="rounded-full bg-muted px-2.5 py-1 text-xs">{product.status.replace("_"," ")}</span></div>
+              {editingProductId===product.id?<div className="mt-4 space-y-3 border-t border-border pt-4">
+                <label className="block text-sm font-medium">Product title<input value={productTitle} onChange={e=>setProductTitle(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" /></label>
+                <label className="block text-sm font-medium">Buyer summary<textarea value={productSummary} onChange={e=>setProductSummary(e.target.value)} className="mt-1 min-h-16 w-full rounded-lg border border-input bg-background px-3 py-2" /></label>
+                <label className="block text-sm font-medium">Product description<textarea value={productDescription} onChange={e=>setProductDescription(e.target.value)} className="mt-1 min-h-36 w-full rounded-lg border border-input bg-background px-3 py-2" /></label>
+                <div className="grid gap-3 sm:grid-cols-3"><label className="block text-sm font-medium">Category<select value={productCategory} onChange={e=>setProductCategory(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2">{categories.map(x=><option key={x}>{x}</option>)}</select></label><label className="block text-sm font-medium">Price<input value={productPrice} onChange={e=>setProductPrice(e.target.value)} inputMode="decimal" className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" /></label><label className="block text-sm font-medium">Currency<select value={productCurrency} onChange={e=>setProductCurrency(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2"><option>USD</option><option>NGN</option><option>GBP</option><option>EUR</option></select></label></div>
+                <label className="block text-sm font-medium">Tags (comma separated)<input value={productTags} onChange={e=>setProductTags(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" /></label>
+                <div className="flex gap-2"><button onClick={()=>void saveProductDetails(product)} className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground">Save product draft</button><button onClick={()=>setEditingProductId(null)} className="rounded-lg border border-border px-3 py-2 text-sm">Cancel</button></div>
+              </div>:null}
               <div className="mt-3 flex flex-wrap gap-2">{(versionHistory[product.id]??[]).map(v=><span key={v.id} className="rounded bg-muted px-2 py-1 text-[11px]">v{v.version_number} · {v.verification_state}</span>)}</div>
               {editingVersion===product.id?<div className="mt-4 space-y-3 border-t border-border pt-4">
                 <label className="block text-sm font-medium">New prompt version<textarea value={versionPrompt} onChange={e=>setVersionPrompt(e.target.value)} className="mt-1 min-h-36 w-full rounded-lg border border-input bg-background px-3 py-2" /></label>
                 <label className="block text-sm font-medium">Usage instructions<textarea value={versionInstructions} onChange={e=>setVersionInstructions(e.target.value)} className="mt-1 min-h-20 w-full rounded-lg border border-input bg-background px-3 py-2" /></label>
                 <label className="block text-sm font-medium">Change log<textarea value={versionChangelog} onChange={e=>setVersionChangelog(e.target.value)} className="mt-1 min-h-16 w-full rounded-lg border border-input bg-background px-3 py-2" placeholder="What changed in this version?" /></label>
                 <div className="flex gap-2"><button onClick={()=>void saveNewVersion(product)} className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground">Save new version</button><button onClick={()=>setEditingVersion(null)} className="rounded-lg border border-border px-3 py-2 text-sm">Cancel</button></div>
-              </div>:<div className="mt-3 flex flex-wrap gap-2"><button onClick={()=>beginNewVersion(product)} className="rounded-lg border border-border px-3 py-2 text-sm">Create new version</button>{product.status==="draft"||product.status==="rejected"?<button onClick={()=>void submit(product)} className="rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary">Submit for review</button>:null}</div>}
+              </div>:<div className="mt-3 flex flex-wrap gap-2"><button onClick={()=>beginEditProduct(product)} className="rounded-lg border border-border px-3 py-2 text-sm">Edit product details</button><button onClick={()=>beginNewVersion(product)} className="rounded-lg border border-border px-3 py-2 text-sm">Create new version</button>{product.status==="draft"||product.status==="rejected"?<button onClick={()=>void submit(product)} className="rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary">Submit for review</button>:null}</div>}
             </article>)}</div>}
         </section>
       </div>
