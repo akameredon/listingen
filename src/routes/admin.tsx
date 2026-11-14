@@ -19,6 +19,7 @@ function AdminPage() {
   const navigate=useNavigate();
   const [role,setRole]=useState("");
   const [queue,setQueue]=useState<QueueItem[]>([]);
+  const [approvedQueue,setApprovedQueue]=useState<QueueItem[]>([]);
   const [rules,setRules]=useState<Array<{id:string;name:string;currency:string;platform_fee_bps:number|null;creator_share_bps:number|null;is_active:boolean}>>([]);
   const [payoutQueue,setPayoutQueue]=useState<Array<{id:string;user_id:string;amount:number;currency:string;status:string;requested_at:string;provider_transfer_ref:string|null;payout_accounts:{id:string;account_label:string|null;provider_account_ref:string|null;status:string}|null}>>([]);
   const [pendingAccounts,setPendingAccounts]=useState<Array<{id:string;user_id:string;account_label:string|null;provider_account_ref:string|null;status:string}>>([]);
@@ -63,8 +64,9 @@ function AdminPage() {
         setQueue((q??[]) as unknown as QueueItem[]);
         setLoading(false);return;
       }
-      const [q,r,p,accounts,tickets,reviews,orders,revenue,campaigns,config]=await Promise.all([
+      const [q,approved,r,p,accounts,tickets,reviews,orders,revenue,campaigns,config]=await Promise.all([
         supabase.from("review_submissions").select("id,product_id,version_id,submitted_by,status,submitted_at,quality_score,completeness_report,originality_report,compliance_report,reproducibility_report,marketplace_products(title,slug),product_versions(prompt_content,verification_state,verification_evidence)").in("status",["pending","in_progress"]).order("submitted_at",{ascending:true}),
+        supabase.from("review_submissions").select("id,product_id,version_id,submitted_by,status,submitted_at,quality_score,completeness_report,originality_report,compliance_report,reproducibility_report,marketplace_products(title,slug),product_versions(prompt_content,verification_state,verification_evidence)").eq("status","approved").order("reviewed_at",{ascending:true}),
         supabase.from("commission_rules").select("id,name,currency,platform_fee_bps,creator_share_bps,is_active").order("created_at",{ascending:false}),
         supabase.from("payout_requests").select("id,user_id,amount,currency,status,requested_at,provider_transfer_ref,payout_accounts(id,account_label,provider_account_ref,status)").in("status",["requested","processing","failed"]).order("requested_at",{ascending:true}),
         supabase.from("payout_accounts").select("id,user_id,account_label,provider_account_ref,status").eq("status","pending").order("created_at",{ascending:true}),
@@ -75,8 +77,8 @@ function AdminPage() {
         supabase.from("campaign_attributions").select("id,campaign_source,campaign_medium,campaign_name,product_id,purchase_id,created_at").order("created_at",{ascending:false}).limit(100),
         supabase.from("app_config").select("key,value,is_public,updated_at").order("key",{ascending:true})
       ]);
-      if(q.error)throw q.error;if(r.error)throw r.error;if(p.error)throw p.error;if(accounts.error)throw accounts.error;if(tickets.error)throw tickets.error;if(reviews.error)throw reviews.error;if(orders.error)throw orders.error;if(revenue.error)throw revenue.error;if(campaigns.error)throw campaigns.error;if(config.error)throw config.error;
-      setQueue((q.data??[]) as unknown as QueueItem[]);setRules(r.data??[]);
+      if(q.error)throw q.error;if(approved.error)throw approved.error;if(r.error)throw r.error;if(p.error)throw p.error;if(accounts.error)throw accounts.error;if(tickets.error)throw tickets.error;if(reviews.error)throw reviews.error;if(orders.error)throw orders.error;if(revenue.error)throw revenue.error;if(campaigns.error)throw campaigns.error;if(config.error)throw config.error;
+      setQueue((q.data??[]) as unknown as QueueItem[]);setApprovedQueue((approved.data??[]) as unknown as QueueItem[]);setRules(r.data??[]);
       setPayoutQueue((p.data??[]) as unknown as typeof payoutQueue);setPendingAccounts(accounts.data??[]);
       setSupportTickets(tickets.data??[]);setBuyerReviews(reviews.data??[]);
       setPaidOrders(orders.data??[]);setPlatformRevenue(revenue.data??[]);setAttributions(campaigns.data??[]);
@@ -92,6 +94,16 @@ function AdminPage() {
   }
 
   useEffect(()=>{void load();},[]);
+
+  async function publishApproved(item:QueueItem){
+    setError("");setNotice("");
+    try{
+      const {error:publishError}=await supabase.from("marketplace_products").update({status:"published",published_at:new Date().toISOString()}).eq("id",item.product_id);
+      if(publishError)throw publishError;
+      await supabase.from("review_events").insert({submission_id:item.id,actor_id:(await supabase.auth.getUser()).data.user?.id,event_type:"published",details:{source:"admin_publication_queue"}});
+      setNotice("Approved product is now published.");await load();
+    }catch(e){setError(e instanceof Error?e.message:"Could not publish approved product.");}
+  }
 
   async function review(item:QueueItem,decision:"approved"|"rejected"|"changes_requested"){
     setError("");setNotice("");
@@ -262,6 +274,7 @@ function AdminPage() {
             {["USD","NGN","GBP","EUR"].map(currency=>{const gross=paidOrders.filter(o=>o.currency===currency).reduce((sum,o)=>sum+o.total_amount,0);const net=platformRevenue.filter(o=>o.currency===currency).reduce((sum,o)=>sum+o.amount,0);return <div key={currency} className="rounded-xl border border-border bg-card p-4"><p className="text-xs uppercase tracking-wider text-muted-foreground">{currency} volume</p><p className="mt-2 text-2xl font-black">{(gross/100).toFixed(2)}</p><p className="mt-1 text-xs text-muted-foreground">Platform net: {(net/100).toFixed(2)}</p></div>;})}
           </div><div className="mt-3 rounded-xl border border-border bg-card p-4"><div className="flex items-center justify-between"><h3 className="font-bold">Recent orders & refunds</h3><span className="text-xs text-muted-foreground">{paidOrders.length} records</span></div>{paidOrders.length===0?<p className="mt-2 text-sm text-muted-foreground">No paid orders yet.</p>:<div className="mt-3 space-y-2">{paidOrders.slice(0,20).map(order=><div key={order.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2 text-xs"><span>{(order.total_amount/100).toFixed(2)} {order.currency} · {order.provider} · {order.status}</span>{order.status==="paid"&&order.provider==="paystack"&&<button disabled={financeBusy} onClick={()=>void refundPurchase(order.id)} className="rounded border border-destructive/50 px-2 py-1 text-destructive disabled:opacity-50">Issue full refund</button>}</div>)}</div>}</div>
 <div className="mt-3 rounded-xl border border-border bg-card p-4"><div className="flex items-center justify-between"><h3 className="font-bold">Recent campaign attribution</h3><span className="text-xs text-muted-foreground">{attributions.length} records</span></div>{attributions.length===0?<p className="mt-2 text-sm text-muted-foreground">Campaign attribution will appear when tracked referral links generate purchases or free claims.</p>:<div className="mt-3 space-y-2">{attributions.slice(0,10).map(a=><div key={a.id} className="flex flex-wrap justify-between gap-2 border-t border-border pt-2 text-xs"><span>{a.campaign_source||"referral"} / {a.campaign_medium||"—"} / {a.campaign_name||"—"}</span><span className="text-muted-foreground">{new Date(a.created_at).toLocaleString()}</span></div>)}</div>}</div></section>}
+          {role==="admin"&&<section className="mt-8"><h2 className="text-xl font-bold">Approved products awaiting publication</h2>{approvedQueue.length===0?<p className="mt-3 text-sm text-muted-foreground">No reviewer-approved products are waiting for publication.</p>:<div className="mt-3 space-y-3">{approvedQueue.map(item=><div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4"><div><p className="font-semibold">{item.marketplace_products?.title??"Untitled product"}</p><p className="text-xs text-muted-foreground">Quality score: {item.quality_score??"—"} · Approved by reviewer</p></div><button onClick={()=>void publishApproved(item)} className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground">Publish product</button></div>)}</div>}</section>}
           <section className="mt-8"><div className="flex items-center justify-between"><h2 className="text-xl font-bold">Review queue</h2><span className="text-xs text-muted-foreground">{queue.length} awaiting review</span></div>
             {queue.length===0?<p className="mt-4 rounded-xl border border-border p-5 text-sm text-muted-foreground">The review queue is clear.</p>:<div className="mt-4 space-y-4">{queue.map(item=><article key={item.id} className="rounded-xl border border-border bg-card p-5">
               <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-bold">{item.marketplace_products?.title??"Untitled product"}</h3><p className="mt-1 text-xs text-muted-foreground">Submitted {new Date(item.submitted_at).toLocaleString()} · {item.status}</p></div><Link to="/product/$slug" params={{slug:item.marketplace_products?.slug??""}} className="text-sm text-primary underline">Open listing</Link></div>
