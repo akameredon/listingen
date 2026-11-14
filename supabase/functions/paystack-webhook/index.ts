@@ -18,6 +18,31 @@ async function verifySignature(raw: Uint8Array, signature: string, secret: strin
   const digest = new Uint8Array(await crypto.subtle.sign("HMAC", key, raw));
   return constantTimeEqual(hex(digest), signature.toLowerCase());
 }
+async function verifyTimestampedSignature(raw: Uint8Array, header: string, secret: string) {
+  const parts = header.split(",").map(part => part.trim());
+  const timestampPart = parts.find(part => part.startsWith("t="));
+  const timestamp = Number(timestampPart?.slice(2));
+  if (!Number.isFinite(timestamp) || Math.abs(Date.now() / 1000 - timestamp) > 300) return false;
+  const signatures = parts.filter(part => part.startsWith("v1=")).map(part => {
+    const value = part.slice(3);
+    const separator = value.indexOf(":");
+    return separator >= 0 ? value.slice(separator + 1).toLowerCase() : "";
+  }).filter(value => /^[0-9a-f]{128}$/.test(value));
+  if (!signatures.length) return false;
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-512" }, false, ["sign"]);
+  const message = new TextEncoder().encode(String(timestamp) + "." + new TextDecoder().decode(raw));
+  const digest = hex(new Uint8Array(await crypto.subtle.sign("HMAC", key, message)));
+  return signatures.some(signature => constantTimeEqual(digest, signature));
+}
+async function verifyPaystackRequest(raw: Uint8Array, req: Request) {
+  const timestampedHeader = req.headers.get("paystack-signature") ?? "";
+  const webhookSecret = Deno.env.get("PAYSTACK_WEBHOOK_SECRET");
+  if (timestampedHeader && webhookSecret && await verifyTimestampedSignature(raw, timestampedHeader, webhookSecret)) return true;
+  const legacySignature = req.headers.get("x-paystack-signature") ?? "";
+  const secretKey = Deno.env.get("PAYSTACK_SECRET_KEY");
+  if (legacySignature && secretKey && await verifySignature(raw, legacySignature, secretKey)) return true;
+  return false;
+}
 function dbClient() {
   const url = Deno.env.get("SUPABASE_URL");
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -32,11 +57,11 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok");
   if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);
   try {
-    const secret = Deno.env.get("PAYSTACK_SECRET_KEY");
-    const signature = req.headers.get("x-paystack-signature") ?? "";
-    if (!secret || !signature) return json({ error: "Webhook authentication is not configured." }, 503);
+    const hasWebhookSecret = Boolean(Deno.env.get("PAYSTACK_WEBHOOK_SECRET"));
+    const hasLegacySecret = Boolean(Deno.env.get("PAYSTACK_SECRET_KEY"));
+    if (!hasWebhookSecret && !hasLegacySecret) return json({ error: "Webhook authentication is not configured." }, 503);
     const raw = new Uint8Array(await req.arrayBuffer());
-    if (!await verifySignature(raw, signature, secret)) return json({ error: "Invalid webhook signature." }, 401);
+    if (!await verifyPaystackRequest(raw, req)) return json({ error: "Invalid webhook signature." }, 401);
     const eventBody = JSON.parse(new TextDecoder().decode(raw));
     const event = String(eventBody?.event ?? "");
     const data = eventBody?.data ?? {};
