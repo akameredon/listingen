@@ -24,6 +24,10 @@ Never put a Supabase secret/service-role key in a `VITE_*` variable or browser b
 
 The functions use Supabase's server-side `SUPABASE_SERVICE_ROLE_KEY` environment variable. It is never sent to the browser.
 
+## AI provider configuration still required
+
+The existing prompt and image generators call the Gemini API from server routes. Set `GEMINI_API_KEY` as a server-only Vercel environment variable for Production, Preview and Development. Do not use a `VITE_*` prefix. The key is not currently configured in the new Vercel project, so generation endpoints will return a clear configuration error until it is supplied.
+
 ## Paystack configuration still required
 
 Set these secrets in Supabase Edge Function secrets before enabling real-money checkout or transfers:
