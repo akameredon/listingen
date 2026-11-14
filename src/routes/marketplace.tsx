@@ -23,7 +23,7 @@ function MarketplacePage() {
       <div className="mx-auto max-w-6xl">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
           <div><Link to="/" className="font-mono text-xs font-bold uppercase tracking-[0.25em] text-primary">Listingen</Link><h1 className="mt-2 text-3xl font-black sm:text-4xl">Marketplace</h1><p className="mt-1 text-sm text-muted-foreground">Useful prompts, tested workflows and creator-built digital products.</p></div>
-          <nav className="flex flex-wrap gap-3 text-sm"><Link to="/studio" className="text-muted-foreground hover:text-foreground">Creator Studio</Link><Link to="/login" className="rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground">Sign in / Join</Link></nav>
+          <nav className="flex flex-wrap gap-3 text-sm"><Link to="/studio" className="text-muted-foreground hover:text-foreground">Creator Studio</Link><Link to="/account" className="text-muted-foreground hover:text-foreground">My account</Link><Link to="/login" className="rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground">Sign in / Join</Link></nav>
         </header>
         <section className="mt-7 rounded-2xl border border-border bg-card p-5 sm:p-7">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Discover and build</p>
