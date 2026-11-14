@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowLeft, Copy, Loader2, Sparkles } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";\nimport { savePromptPackage } from "@/lib/marketplace-client";\nimport type { Json } from "@/integrations/supabase/types";
 import { emptyAppsGamesInput, type AppsGamesInput } from "@/lib/apps-games";
 
 export const Route = createFileRoute("/apps-games")({
@@ -22,11 +22,11 @@ function AppsGamesPage() {
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState(false);\n  const [saving, setSaving] = useState(false);\n  const [saved, setSaved] = useState(false);
   const set = <K extends keyof AppsGamesInput>(key: K, value: AppsGamesInput[K]) => setV((old) => ({ ...old, [key]: value }));
 
   async function generate() {
-    setLoading(true); setError(""); setOutput("");
+    setLoading(true); setError(""); setOutput(""); setSaved(false);
     try {
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
@@ -42,6 +42,16 @@ function AppsGamesPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function saveOutput() {
+    setSaving(true); setError("");
+    try {
+      await savePromptPackage(v as unknown as Json, v.core_idea, output);
+      setSaved(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save this prompt package. Sign in and try again.");
+    } finally { setSaving(false); }
   }
 
   async function copy(text: string) {
@@ -127,7 +137,7 @@ function AppsGamesPage() {
         </section>
 
         {output && <section className="mt-7 rounded-xl border border-border bg-card p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-bold">Your PromptBase package</h2><button onClick={() => copy(output)} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-bold text-primary-foreground"><Copy className="size-3.5" /> {copied ? "Copied" : "Copy all"}</button></div>
+          <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-bold">Your PromptBase package</h2><button onClick={() => copy(output)} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-bold text-primary-foreground"><Copy className="size-3.5" /> {copied ? "Copied" : "Copy all"}</button><button disabled={saving||saved} onClick={saveOutput} className="inline-flex items-center gap-2 rounded-md border border-primary px-3 py-2 text-xs font-bold text-primary disabled:opacity-50">{saved ? "Saved to Creator Studio" : saving ? "Saving…" : "Save to Creator Studio"}</button></div>
           <pre className="mt-4 whitespace-pre-wrap break-words text-sm leading-7">{output}</pre>
         </section>}
         <p className="mt-7 rounded-lg border border-border p-4 text-xs text-muted-foreground">A generated prompt is documented, not reproduced. Run it in the selected coding agent, test the actual build, and upload genuine previews before claiming it is verified or submitting it to a marketplace.</p>
