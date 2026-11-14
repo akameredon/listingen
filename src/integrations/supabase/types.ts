@@ -266,6 +266,7 @@ export type Database = {
         Row: {
           batch_id: string | null
           created_at: string
+          folder: string
           id: string
           idea: string
           input: Json
@@ -273,6 +274,7 @@ export type Database = {
           score: number | null
           score_report: Json | null
           status: string
+          tags: string[]
           template: string
           title: string
           updated_at: string
@@ -281,6 +283,7 @@ export type Database = {
         Insert: {
           batch_id?: string | null
           created_at?: string
+          folder?: string
           id?: string
           idea?: string
           input?: Json
@@ -288,6 +291,7 @@ export type Database = {
           score?: number | null
           score_report?: Json | null
           status?: string
+          tags?: string[]
           template?: string
           title?: string
           updated_at?: string
@@ -296,6 +300,7 @@ export type Database = {
         Update: {
           batch_id?: string | null
           created_at?: string
+          folder?: string
           id?: string
           idea?: string
           input?: Json
@@ -303,6 +308,7 @@ export type Database = {
           score?: number | null
           score_report?: Json | null
           status?: string
+          tags?: string[]
           template?: string
           title?: string
           updated_at?: string
