@@ -52,6 +52,17 @@ jobs:
           rm -f listingen.dump
           test -s listingen.dump.gpg
 
+      - name: Verify encrypted backup can be decrypted and restored
+        shell: bash
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$BACKUP_ENCRYPTION_KEY" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --decrypt --output restore-check.dump listingen.dump.gpg
+          pg_restore --list restore-check.dump >/dev/null
+          test -s restore-check.dump
+          rm -f restore-check.dump
+
       - name: Store encrypted backup artifact
         uses: actions/upload-artifact@v4
         with:
