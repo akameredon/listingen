@@ -319,11 +319,14 @@ export type Database = {
       marketplace_products: {
         Row: {
           category: string
+          compare_at_price_amount: number | null
           created_at: string
           creator_id: string
           currency: string
           current_version_id: string | null
           description: string
+          discount_ends_at: string | null
+          discount_starts_at: string | null
           id: string
           preview_content: string
           price_amount: number
@@ -338,11 +341,14 @@ export type Database = {
         }
         Insert: {
           category: string
+          compare_at_price_amount?: number | null
           created_at?: string
           creator_id: string
           currency?: string
           current_version_id?: string | null
           description?: string
+          discount_ends_at?: string | null
+          discount_starts_at?: string | null
           id?: string
           preview_content?: string
           price_amount: number
@@ -357,11 +363,14 @@ export type Database = {
         }
         Update: {
           category?: string
+          compare_at_price_amount?: number | null
           created_at?: string
           creator_id?: string
           currency?: string
           current_version_id?: string | null
           description?: string
+          discount_ends_at?: string | null
+          discount_starts_at?: string | null
           id?: string
           preview_content?: string
           price_amount?: number
