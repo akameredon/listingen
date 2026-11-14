@@ -52,6 +52,8 @@ export async function savePromptPackage(input: import("@/integrations/supabase/t
       output,
       template: meta.template,
       status: "draft",
+      folder: "Uncategorized",
+      tags: [],
     })
     .select("id,title,status,created_at")
     .single();
@@ -71,11 +73,38 @@ export async function getMyListings() {
   await requireUser();
   const { data, error } = await supabase
     .from("listings")
-    .select("id,title,idea,input,output,template,status,created_at")
+    .select("id,title,idea,input,output,template,status,folder,tags,created_at")
     .order("created_at", { ascending: false })
     .limit(100);
   if (error) throw error;
   return data as ListingRow[];
+}
+
+export async function updateListingDraft(args: { id: string; title: string; idea: string; output: string; folder: string; tags: string[] }) {
+  await requireUser();
+  const meta = extractMeta(args.output);
+  const { data, error } = await supabase.from("listings").update({
+    title: args.title.trim().slice(0,160) || meta.title,
+    idea: args.idea.trim().slice(0,2000),
+    output: args.output,
+    template: meta.template,
+    folder: args.folder.trim().slice(0,60) || "Uncategorized",
+    tags: args.tags.slice(0,20),
+  }).eq("id",args.id).select("id,title,status,folder,tags,created_at").single();
+  if(error)throw error;
+  return data;
+}
+
+export async function duplicateListingDraft(listing: ListingRow) {
+  const user=await requireUser();
+  const {data,error}=await supabase.from("listings").insert({
+    user_id:user.id,title:`Copy of ${listing.title}`.slice(0,160),idea:listing.idea,
+    input:listing.input as import("@/integrations/supabase/types").Json,
+    output:listing.output,template:listing.template,status:"draft",
+    folder:listing.folder,tags:listing.tags,
+  }).select("id,title,status,folder,tags,created_at").single();
+  if(error)throw error;
+  return data;
 }
 
 export async function getMyProducts() {
