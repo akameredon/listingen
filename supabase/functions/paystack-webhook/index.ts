@@ -66,7 +66,7 @@ Deno.serve(async (req: Request) => {
     const event = String(eventBody?.event ?? "");
     const data = eventBody?.data ?? {};
     const db = dbClient();
-    const reference = String(data?.reference ?? data?.transaction?.reference ?? "");
+    const reference = String(data?.reference ?? data?.transaction?.reference ?? data?.transaction_reference ?? "");
     const eventIdentity = String(data?.id ?? data?.transfer_code ?? data?.reference ?? crypto.randomUUID());
     const providerEventId = `${event}:${eventIdentity}`;
 
