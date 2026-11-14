@@ -12,6 +12,8 @@ export type ListingRow = {
   output: string;
   template: string;
   status: string;
+  folder: string;
+  tags: string[];
   created_at: string;
 };
 
