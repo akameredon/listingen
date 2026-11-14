@@ -25,6 +25,9 @@ function AdminPage() {
   const [supportTickets,setSupportTickets]=useState<Array<{id:string;requester_id:string;subject:string;message:string;status:string;priority:string;created_at:string}>>([]);
   const [buyerReviews,setBuyerReviews]=useState<Array<{id:string;product_id:string;rating:number;review_text:string;status:string;created_at:string}>>([]);
   const [financeBusy,setFinanceBusy]=useState(false);
+  const [paidOrders,setPaidOrders]=useState<Array<{id:string;total_amount:number;currency:string;created_at:string}>>([]);
+  const [platformRevenue,setPlatformRevenue]=useState<Array<{id:string;amount:number;currency:string;entry_type:string;created_at:string}>>([]);
+  const [attributions,setAttributions]=useState<Array<{id:string;campaign_source:string|null;campaign_medium:string|null;campaign_name:string|null;product_id:string|null;purchase_id:string|null;created_at:string}>>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
@@ -44,18 +47,22 @@ function AdminPage() {
       const currentRole=String(data.user.app_metadata?.role??"");
       setRole(currentRole);
       if(!["admin","reviewer"].includes(currentRole)){setLoading(false);return;}
-      const [q,r,p,accounts,tickets,reviews]=await Promise.all([
+      const [q,r,p,accounts,tickets,reviews,orders,revenue,campaigns]=await Promise.all([
         supabase.from("review_submissions").select("id,product_id,version_id,submitted_by,status,submitted_at,quality_score,completeness_report,originality_report,compliance_report,reproducibility_report,marketplace_products(title,slug),product_versions(prompt_content,verification_state,verification_evidence)").in("status",["pending","in_progress"]).order("submitted_at",{ascending:true}),
         supabase.from("commission_rules").select("id,name,currency,platform_fee_bps,creator_share_bps,is_active").order("created_at",{ascending:false}),
         supabase.from("payout_requests").select("id,user_id,amount,currency,status,requested_at,provider_transfer_ref,payout_accounts(id,account_label,provider_account_ref,status)").in("status",["requested","processing","failed"]).order("requested_at",{ascending:true}),
         supabase.from("payout_accounts").select("id,user_id,account_label,provider_account_ref,status").eq("status","pending").order("created_at",{ascending:true}),
         supabase.from("support_tickets").select("id,requester_id,subject,message,status,priority,created_at").in("status",["open","in_progress"]).order("created_at",{ascending:true}),
-        supabase.from("product_reviews").select("id,product_id,rating,review_text,status,created_at").eq("status","pending").order("created_at",{ascending:true})
+        supabase.from("product_reviews").select("id,product_id,rating,review_text,status,created_at").eq("status","pending").order("created_at",{ascending:true}),
+        supabase.from("purchases").select("id,total_amount,currency,created_at").eq("status","paid").order("created_at",{ascending:false}).limit(500),
+        supabase.from("platform_revenue_entries").select("id,amount,currency,entry_type,created_at").order("created_at",{ascending:false}).limit(500),
+        supabase.from("campaign_attributions").select("id,campaign_source,campaign_medium,campaign_name,product_id,purchase_id,created_at").order("created_at",{ascending:false}).limit(100)
       ]);
-      if(q.error)throw q.error;if(r.error)throw r.error;if(p.error)throw p.error;if(accounts.error)throw accounts.error;if(tickets.error)throw tickets.error;if(reviews.error)throw reviews.error;
+      if(q.error)throw q.error;if(r.error)throw r.error;if(p.error)throw p.error;if(accounts.error)throw accounts.error;if(tickets.error)throw tickets.error;if(reviews.error)throw reviews.error;if(orders.error)throw orders.error;if(revenue.error)throw revenue.error;if(campaigns.error)throw campaigns.error;
       setQueue((q.data??[]) as unknown as QueueItem[]);setRules(r.data??[]);
       setPayoutQueue((p.data??[]) as unknown as typeof payoutQueue);setPendingAccounts(accounts.data??[]);
       setSupportTickets(tickets.data??[]);setBuyerReviews(reviews.data??[]);
+      setPaidOrders(orders.data??[]);setPlatformRevenue(revenue.data??[]);setAttributions(campaigns.data??[]);
     }catch(e){setError(e instanceof Error?e.message:"Unable to load admin workspace.");}
     finally{setLoading(false);}
   }
@@ -162,6 +169,9 @@ function AdminPage() {
         {error&&<p role="alert" className="mt-5 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">{error}</p>}
         {notice&&<p role="status" className="mt-5 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">{notice}</p>}
         {loading?<p className="mt-8 text-sm text-muted-foreground">Loading admin workspace…</p>:!["admin","reviewer"].includes(role)?<div className="mt-8 rounded-xl border border-border p-6"><h2 className="text-xl font-bold">Restricted workspace</h2><p className="mt-2 text-sm text-muted-foreground">This account does not currently have an administrator or reviewer role in Supabase app metadata. Admin access is never granted from a client-side profile field.</p></div>:<>
+          {role==="admin"&&<section className="mt-8"><h2 className="text-xl font-bold">Marketplace analytics</h2><div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {["USD","NGN","GBP","EUR"].map(currency=>{const gross=paidOrders.filter(o=>o.currency===currency).reduce((sum,o)=>sum+o.total_amount,0);const net=platformRevenue.filter(o=>o.currency===currency).reduce((sum,o)=>sum+o.amount,0);return <div key={currency} className="rounded-xl border border-border bg-card p-4"><p className="text-xs uppercase tracking-wider text-muted-foreground">{currency} volume</p><p className="mt-2 text-2xl font-black">{(gross/100).toFixed(2)}</p><p className="mt-1 text-xs text-muted-foreground">Platform net: {(net/100).toFixed(2)}</p></div>;})}
+          </div><div className="mt-3 rounded-xl border border-border bg-card p-4"><div className="flex items-center justify-between"><h3 className="font-bold">Recent campaign attribution</h3><span className="text-xs text-muted-foreground">{attributions.length} records</span></div>{attributions.length===0?<p className="mt-2 text-sm text-muted-foreground">Campaign attribution will appear when tracked referral links generate purchases or free claims.</p>:<div className="mt-3 space-y-2">{attributions.slice(0,10).map(a=><div key={a.id} className="flex flex-wrap justify-between gap-2 border-t border-border pt-2 text-xs"><span>{a.campaign_source||"referral"} / {a.campaign_medium||"—"} / {a.campaign_name||"—"}</span><span className="text-muted-foreground">{new Date(a.created_at).toLocaleString()}</span></div>)}</div>}</div></section>}
           <section className="mt-8"><div className="flex items-center justify-between"><h2 className="text-xl font-bold">Review queue</h2><span className="text-xs text-muted-foreground">{queue.length} awaiting review</span></div>
             {queue.length===0?<p className="mt-4 rounded-xl border border-border p-5 text-sm text-muted-foreground">The review queue is clear.</p>:<div className="mt-4 space-y-4">{queue.map(item=><article key={item.id} className="rounded-xl border border-border bg-card p-5">
               <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-bold">{item.marketplace_products?.title??"Untitled product"}</h3><p className="mt-1 text-xs text-muted-foreground">Submitted {new Date(item.submitted_at).toLocaleString()} · {item.status}</p></div><Link to="/product/$slug" params={{slug:item.marketplace_products?.slug??""}} className="text-sm text-primary underline">Open listing</Link></div>
