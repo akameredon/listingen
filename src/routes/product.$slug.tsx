@@ -15,6 +15,8 @@ function ProductPage() {
   const [creator,setCreator] = useState<{slug:string;headline:string|null;about:string|null}|null>(null);
   const [loading,setLoading] = useState(true);
   const [error,setError] = useState("");
+  const [checkoutBusy,setCheckoutBusy] = useState(false);
+  const [checkoutError,setCheckoutError] = useState("");
 
   useEffect(()=>{
     let active=true;
@@ -37,6 +39,26 @@ function ProductPage() {
     }
     void load();return()=>{active=false;};
   },[slug]);
+
+  async function startCheckout(){
+    if(!product)return;
+    setCheckoutBusy(true);setCheckoutError("");
+    try{
+      const {data:userData}=await supabase.auth.getUser();
+      if(!userData.user){
+        window.location.assign(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+        return;
+      }
+      const action=product.price_amount===0?"claim_free":"initialize_checkout";
+      const {data,error:invokeError}=await supabase.functions.invoke("marketplace-finance",{body:{action,productId:product.id}});
+      if(invokeError)throw new Error(invokeError.message);
+      if(data?.error)throw new Error(data.error);
+      if(data?.authorization_url){window.location.assign(data.authorization_url);return;}
+      if(data?.reference){window.location.assign(`/payment/return?reference=${encodeURIComponent(data.reference)}`);return;}
+      throw new Error("The payment provider returned an unexpected response.");
+    }catch(e){setCheckoutError(e instanceof Error?e.message:"Could not start checkout.");}
+    finally{setCheckoutBusy(false);}
+  }
 
   if(loading)return <main className="min-h-screen bg-background p-8 text-muted-foreground">Loading product…</main>;
   if(error||!product)return <main className="min-h-screen bg-background px-4 py-12 text-foreground"><div className="mx-auto max-w-xl rounded-xl border border-border p-6"><h1 className="text-2xl font-bold">Product unavailable</h1><p className="mt-2 text-sm text-muted-foreground">{error||"This product may have been unpublished or removed."}</p><Link to="/marketplace" className="mt-5 inline-flex text-primary underline">Back to marketplace</Link></div></main>;
@@ -63,7 +85,8 @@ function ProductPage() {
             <p className="text-xs uppercase tracking-wider text-muted-foreground">One-time purchase</p>
             <p className="mt-2 text-3xl font-black">{product.price_amount===0?"Free":`${(product.price_amount/100).toFixed(2)} ${product.currency}`}</p>
             <p className="mt-3 text-sm text-muted-foreground">Secure checkout and automatic delivery will activate when the payment provider and commission policy are configured.</p>
-            <button disabled className="mt-5 w-full cursor-not-allowed rounded-lg bg-primary px-4 py-3 text-sm font-bold text-primary-foreground opacity-50">Checkout not enabled yet</button>
+            {checkoutError&&<p role="alert" className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs">{checkoutError}</p>}
+            <button disabled={checkoutBusy} onClick={()=>void startCheckout()} className="mt-5 w-full rounded-lg bg-primary px-4 py-3 text-sm font-bold text-primary-foreground disabled:opacity-50">{checkoutBusy?"Preparing…":product.price_amount===0?"Claim free product":"Buy now"}</button>
             <p className="mt-3 text-xs text-muted-foreground">We never mark an order paid from a browser redirect alone. Payment confirmation must come from a verified provider webhook.</p>
           </aside>
         </div>
