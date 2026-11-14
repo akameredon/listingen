@@ -52,12 +52,16 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/factory': typeof FactoryRoute
   '/api/listing': typeof ApiListingRoute
+  '/apps-games': typeof AppsGamesRoute
+  '/api/apps-games': typeof ApiAppsGamesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/factory': typeof FactoryRoute
   '/api/listing': typeof ApiListingRoute
+  '/apps-games': typeof AppsGamesRoute
+  '/api/apps-games': typeof ApiAppsGamesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
