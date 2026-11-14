@@ -183,6 +183,33 @@ async function verifyPayoutAccount(req: Request, body: Record<string, unknown>, 
   return reply(req, { account_id: account.id, status: "verified", bank_name: details.bank_name ?? null, account_last4: accountNumber.slice(-4) || null });
 }
 
+async function requestRefund(req: Request, body: Record<string, unknown>, user: { id: string; app_metadata?: Record<string, unknown> }) {
+  if (user.app_metadata?.role !== "admin") return reply(req, { error: "Administrator access is required." }, 403);
+  const secret = Deno.env.get("PAYSTACK_SECRET_KEY");
+  if (!secret) return reply(req, { error: "Paystack refunds are not configured." }, 503);
+  const purchaseId = typeof body.purchaseId === "string" ? body.purchaseId : "";
+  const reason = typeof body.reason === "string" ? body.reason.trim().slice(0,300) : "Customer refund approved by Listingen support.";
+  if (!purchaseId) return reply(req, { error: "A purchase is required." }, 400);
+  const db = serviceClient();
+  const { data: purchase, error } = await db.from("purchases")
+    .select("id,provider,provider_payment_id,provider_checkout_id,status,total_amount,currency")
+    .eq("id", purchaseId).single();
+  if (error || !purchase) return reply(req, { error: "Purchase not found." }, 404);
+  if (purchase.provider !== "paystack" || purchase.status !== "paid") return reply(req, { error: "Only paid Paystack purchases can be refunded through this workflow." }, 409);
+  const transaction = purchase.provider_payment_id || purchase.provider_checkout_id;
+  if (!transaction) return reply(req, { error: "The Paystack transaction reference is missing." }, 409);
+  const response = await fetch("https://api.paystack.co/refund", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ transaction, customer_note: reason, merchant_note: "Listingen full order refund" }),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !result?.status) return reply(req, { error: result?.message ?? "Paystack could not initiate the refund." }, 502);
+  const { error: updateError } = await db.from("purchases").update({ status: "refund_pending" }).eq("id", purchase.id).eq("status", "paid");
+  if (updateError) return reply(req, { error: "Paystack accepted the refund request, but Listingen could not update its order. Reconcile before retrying." }, 500);
+  return reply(req, { purchase_id: purchase.id, status: "refund_pending", provider_status: result.data?.status ?? "pending" });
+}
+
 async function executePayout(req: Request, body: Record<string, unknown>, user: { id: string; app_metadata?: Record<string, unknown> }) {
   if (user.app_metadata?.role !== "admin") return reply(req, { error: "Administrator access is required." }, 403);
   const secret = Deno.env.get("PAYSTACK_SECRET_KEY");
@@ -227,6 +254,7 @@ Deno.serve(async (req: Request) => {
     if (body.action === "claim_free") return await claimFree(req, body, user);
     if (body.action === "request_payout") return await requestPayout(req, body, user);
     if (body.action === "verify_payout_account") return await verifyPayoutAccount(req, body, user);
+    if (body.action === "request_refund") return await requestRefund(req, body, user);
     if (body.action === "execute_payout") return await executePayout(req, body, user);
     return reply(req, { error: "Unknown finance action." }, 400);
   } catch (error) {
