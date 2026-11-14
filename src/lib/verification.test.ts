@@ -26,6 +26,21 @@ describe("assessPromptPackage", () => {
     expect(result.completeness.missing).toContain("customizable_placeholders_or_explicit_fixed_input");
   });
 
+  it("rejects IPv4 and IPv6 literals, private DNS suffixes and credential-bearing URLs", () => {
+    const result = assessPromptPackage({
+      ...completePackage,
+      instructions: [
+        "1. Open https://example.com/docs.",
+        "2. Do not trust http://127.1/admin.",
+        "3. Do not trust http://[::1]/admin.",
+        "4. Do not trust http://service.internal/health.",
+        "5. Do not trust https://user:password@example.org/private.",
+      ].join("\\n"),
+    });
+    expect(result.sourceValidation.validCount).toBe(1);
+    expect(result.sourceValidation.invalidCount).toBe(4);
+  });
+
   it("routes high-risk claims to human review without making a legal conclusion", () => {
     const result = assessPromptPackage({ ...completePackage, description: "Guaranteed income and guaranteed profit." });
     expect(result.compliance.requiresHumanReview).toBe(true);
