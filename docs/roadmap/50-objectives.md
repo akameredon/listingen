@@ -12,7 +12,7 @@ Statuses are evidence-based: **Complete** means the implementation exists and ha
 6. [x] Implement email registration, sign-in and password recovery.
 7. [x] Enable RLS and explicit API grants; security advisors report no findings.
 8. [x] Create the central app configuration table, admin JSON editor and public homepage configuration.
-9. [ ] Configure and verify automated backup and recovery procedures.
+9. [~] Add a weekly encrypted backup workflow and restore runbook; actual backup runs await the GitHub database-URL and encryption secrets.
 10. [x] Add CI lint, unit-test and production-build gates; latest feature-branch pipeline passed.
 
 ## Phase 2 — Creator Studio
