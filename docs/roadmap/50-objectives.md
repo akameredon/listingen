@@ -11,9 +11,9 @@ Statuses are evidence-based: **Complete** means the implementation exists and ha
 5. [~] Establish buyer, creator, reviewer and administrator authorization using Supabase Auth `app_metadata`; first administrator provisioning remains outstanding.
 6. [x] Implement email registration, sign-in and password recovery.
 7. [x] Enable RLS and explicit API grants; security advisors report no findings.
-8. [~] Create the central app configuration table and admin-controlled access; full settings UI remains.
+8. [x] Create the central app configuration table, admin JSON editor and public homepage configuration.
 9. [ ] Configure and verify automated backup and recovery procedures.
-10. [~] Add CI lint, test and production-build gates; latest pipeline run is still being verified.
+10. [x] Add CI lint, unit-test and production-build gates; latest feature-branch pipeline passed.
 
 ## Phase 2 — Creator Studio
 
@@ -21,7 +21,7 @@ Statuses are evidence-based: **Complete** means the implementation exists and ha
 12. [x] Public creator profiles and storefront pages.
 13. [x] Creator dashboard with prompt, product and earnings views.
 14. [x] Unified saved prompt library.
-15. [~] Save and copy drafts; in-place editing, duplication and folder organization remain.
+15. [x] Save, edit, duplicate, tag and organize prompt drafts into creator folders.
 16. [x] Immutable product version history and resubmission.
 17. [~] Standard generator categories and Apps & Games generator exist; additional specialist generator experiences remain.
 18. [x] Preserve the ordinary prompt generator.
@@ -34,9 +34,9 @@ Statuses are evidence-based: **Complete** means the implementation exists and ha
 22. [x] Check required fields, prompt length, placeholders and step-by-step instructions.
 23. [~] Add exact and similarity-based duplicate triage against up to 100 visible catalog records; broader plagiarism detection remains.
 24. [~] Add policy-risk keyword screening and human moderation; this is triage, not legal determination.
-25. [ ] Add automated validation of referenced tools, URLs and service availability.
+25. [~] Validate URL syntax and reject local/private targets; live reachability and tool/service status checks remain.
 26. [x] Check required inputs, placeholders and usage instructions.
-27. [~] Add evidence-backed documented/tested/reproduced states; isolated execution and repeatable sandbox runs remain.
+27. [~] Add evidence-backed manual verification runs and database guards; isolated execution and repeatable sandbox runs remain.
 28. [x] Explicitly distinguish documented, tested and reproduced states.
 29. [x] Add reviewer/admin approval, rejection and change-request workflow.
 30. [x] Store quality, completeness, originality, compliance and reproducibility reports per submission.
@@ -46,8 +46,8 @@ Statuses are evidence-based: **Complete** means the implementation exists and ha
 31. [x] Public marketplace discovery page.
 32. [x] Category taxonomy and category filtering.
 33. [x] Product detail pages with preview and verification disclosures.
-34. [~] Creator-set product pricing; discounts and promotional pricing remain.
-35. [~] Search and category filtering; advanced filters and sorting remain.
+34. [x] Creator-set pricing, compare-at pricing and scheduled discount windows.
+35. [x] Search, category filtering and newest/price/title sorting.
 36. [x] Draft, review, approval and publication states.
 37. [~] Paystack checkout initialization is implemented in a server-side Edge Function; live checkout is blocked until Paystack secrets and an active commission rule are configured.
 38. [x] Secure prompt delivery only after a verified paid order or free claim.
@@ -60,10 +60,10 @@ Statuses are evidence-based: **Complete** means the implementation exists and ha
 42. [x] Creator ledger and separate platform revenue ledger with idempotent webhook processing.
 43. [~] Earnings history, available-balance calculation and atomic payout requests exist; live settlement awaits verified Paystack recipients and credentials.
 44. [~] Paystack recipient verification and transfer initiation are implemented; provider credentials and webhook setup remain outstanding.
-45. [x] Admin Command Centre for review, commissions, payout operations, support, moderation and analytics; admin role provisioning remains.
+45. [~] Admin Command Centre includes review, commissions, payout operations, support, moderation, analytics, app configuration and user-role management; initial administrator provisioning remains.
 46. [~] Review moderation, support/dispute intake and full refunds exist; partial refunds and a complete dispute evidence workflow remain.
 47. [x] Generate copy-ready social captions and share links for published products.
-48. [~] Referral codes, UTM capture and purchase attribution exist; comprehensive SEO, affiliate commissions and campaign automation remain.
+48. [~] Referral codes, tracked product links, UTM capture, purchase attribution and dynamic product/creator metadata exist; full affiliate commissions and campaign automation remain.
 49. [x] Basic paid-sales, platform-revenue and campaign-attribution analytics.
 50. [~] Creator referral and sharing tools exist; automated acquisition, retention and growth experiments remain.
 
