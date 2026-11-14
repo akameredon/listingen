@@ -25,6 +25,8 @@ function AdminPage() {
   const [supportTickets,setSupportTickets]=useState<Array<{id:string;requester_id:string;subject:string;message:string;status:string;priority:string;created_at:string}>>([]);
   const [buyerReviews,setBuyerReviews]=useState<Array<{id:string;product_id:string;rating:number;review_text:string;status:string;created_at:string}>>([]);
   const [financeBusy,setFinanceBusy]=useState(false);
+  const [verificationNotes,setVerificationNotes]=useState<Record<string,string>>({});
+  const [verificationEvidence,setVerificationEvidence]=useState<Record<string,string>>({});
   const [paidOrders,setPaidOrders]=useState<Array<{id:string;provider:string;status:string;total_amount:number;currency:string;created_at:string}>>([]);
   const [platformRevenue,setPlatformRevenue]=useState<Array<{id:string;amount:number;currency:string;entry_type:string;created_at:string}>>([]);
   const [attributions,setAttributions]=useState<Array<{id:string;campaign_source:string|null;campaign_medium:string|null;campaign_name:string|null;product_id:string|null;purchase_id:string|null;created_at:string}>>([]);
@@ -110,6 +112,29 @@ function AdminPage() {
       setNotice(role==="admin"&&decision==="approved"?"Product approved and published.":"Review decision saved. An administrator must complete publication if required.");
       await load();
     }catch(e){setError(e instanceof Error?e.message:"Could not save review decision.");}
+  }
+
+  async function recordManualVerification(item:QueueItem,status:"passed"|"failed"|"blocked"){
+    setError("");setNotice("");
+    const notes=verificationNotes[item.id]?.trim()??"";
+    const evidence=verificationEvidence[item.id]?.trim()??"";
+    if(notes.length<10){setError("Add at least 10 characters of expected/actual test notes.");return;}
+    if(status==="passed"&&!evidence){setError("A passed manual test requires an evidence URL or artifact reference.");return;}
+    try{
+      const {data:userData,error:userError}=await supabase.auth.getUser();if(userError||!userData.user)throw new Error("Sign in to continue.");
+      const {error:runError}=await supabase.from("verification_runs").insert({
+        product_id:item.product_id,version_id:item.version_id,runner_type:"manual",status,
+        test_input:{method:"reviewer_manual_test"},expected_result:"Reviewer-defined expected behavior",actual_result:notes,
+        evidence_url:evidence||null,started_by:userData.user.id
+      });
+      if(runError)throw runError;
+      if(status==="passed"){
+        const {error:updateError}=await supabase.from("product_versions").update({verification_state:"tested",verification_evidence:{method:"manual",evidence_url:evidence,notes,verified_at:new Date().toISOString()}}).eq("id",item.version_id);
+        if(updateError)throw updateError;
+      }
+      setNotice(status==="passed"?"Manual test passed; version marked tested (not reproduced).":"Verification run recorded.");
+      await load();
+    }catch(e){setError(e instanceof Error?e.message:"Could not record verification run.");}
   }
 
   async function refundPurchase(purchaseId:string){
@@ -215,6 +240,7 @@ function AdminPage() {
             {queue.length===0?<p className="mt-4 rounded-xl border border-border p-5 text-sm text-muted-foreground">The review queue is clear.</p>:<div className="mt-4 space-y-4">{queue.map(item=><article key={item.id} className="rounded-xl border border-border bg-card p-5">
               <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-bold">{item.marketplace_products?.title??"Untitled product"}</h3><p className="mt-1 text-xs text-muted-foreground">Submitted {new Date(item.submitted_at).toLocaleString()} · {item.status}</p></div><Link to="/product/$slug" params={{slug:item.marketplace_products?.slug??""}} className="text-sm text-primary underline">Open listing</Link></div>
               <pre className="mt-4 max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-muted p-4 text-xs">{item.product_versions?.prompt_content??"No prompt version found."}</pre>
+              <div className="mt-4 rounded-lg border border-border p-3"><p className="text-sm font-semibold">Record manual verification</p><p className="mt-1 text-xs text-muted-foreground">A manual pass marks this version “tested”. Only an isolated runner can mark it “reproduced”.</p><textarea value={verificationNotes[item.id]??""} onChange={e=>setVerificationNotes(v=>({...v,[item.id]:e.target.value}))} className="mt-2 min-h-16 w-full rounded-lg border border-input bg-background px-3 py-2 text-xs" placeholder="Expected behavior, actual result and test steps…" /><input value={verificationEvidence[item.id]??""} onChange={e=>setVerificationEvidence(v=>({...v,[item.id]:e.target.value}))} className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-xs" placeholder="Evidence URL or artifact reference (required for pass)" /><div className="mt-2 flex flex-wrap gap-2"><button onClick={()=>void recordManualVerification(item,"passed")} className="rounded border border-primary px-2.5 py-1.5 text-xs text-primary">Pass manual test</button><button onClick={()=>void recordManualVerification(item,"failed")} className="rounded border border-destructive/50 px-2.5 py-1.5 text-xs text-destructive">Fail</button><button onClick={()=>void recordManualVerification(item,"blocked")} className="rounded border border-border px-2.5 py-1.5 text-xs">Blocked</button></div></div>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <div className="rounded-lg bg-muted p-3"><p className="text-xs font-semibold">Automated quality score</p><p className="mt-1 text-2xl font-black">{item.quality_score??"—"}<span className="text-xs font-normal text-muted-foreground"> / 100</span></p></div>
                 <div className="rounded-lg bg-muted p-3"><p className="text-xs font-semibold">Assessment reports</p><pre className="mt-1 max-h-28 overflow-auto whitespace-pre-wrap text-[11px] text-muted-foreground">{JSON.stringify({completeness:item.completeness_report,originality:item.originality_report,compliance:item.compliance_report,reproducibility:item.reproducibility_report},null,2)}</pre></div>
