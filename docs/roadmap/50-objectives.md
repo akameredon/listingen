@@ -5,7 +5,7 @@ Statuses are evidence-based: **Complete** means the implementation exists and ha
 ## Phase 1 — Infrastructure and foundation
 
 1. [x] Connect the repository and application configuration to the new Sleekblue Supabase project.
-2. [~] Configure environment variables. Supabase public values are configured in Vercel; AI and Paystack secrets and a canonical production origin remain outstanding.
+2. [~] Configure environment variables. Supabase public values are configured in Vercel; AI and Paystack secrets and a canonical production origin remain outstanding. The current Vercel Hobby daily deployment quota also prevented a fresh preview build of the latest commit.
 3. [~] Audit the existing schema and preserve the legacy `listings` model. The old Lovable-managed records have not been migrated because that backend is not available in this Supabase workspace.
 4. [x] Establish versioned SQL migrations aligned with the remote migration history.
 5. [~] Establish buyer, creator, reviewer and administrator authorization using Supabase Auth `app_metadata`; first administrator provisioning remains outstanding.
@@ -69,7 +69,7 @@ Statuses are evidence-based: **Complete** means the implementation exists and ha
 
 ## Release gates
 
-- No production launch until CI passes on the release commit.
+- No production launch until CI passes on the release commit and a deployment of that exact commit is verified. The latest feature commit passed GitHub CI; a matching Vercel deployment is pending after the Hobby daily deployment quota resets.
 - No payment is marked paid from a browser redirect; only a verified Paystack webhook can settle an order.
 - No creator/platform split is assumed; checkout requires an active admin-configured commission rule.
 - No service-role key is exposed to the browser.
