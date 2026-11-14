@@ -32,6 +32,9 @@ function AdminPage() {
   const [attributions,setAttributions]=useState<Array<{id:string;campaign_source:string|null;campaign_medium:string|null;campaign_name:string|null;product_id:string|null;purchase_id:string|null;created_at:string}>>([]);
   const [appConfig,setAppConfig]=useState<Array<{key:string;value:unknown;is_public:boolean;updated_at:string}>>([]);
   const [configDrafts,setConfigDrafts]=useState<Record<string,string>>({});
+  const [userDirectory,setUserDirectory]=useState<Array<{id:string;email:string|null;created_at:string;last_sign_in_at:string|null;role:string}>>([]);
+  const [userFilter,setUserFilter]=useState("");
+  const [roleDrafts,setRoleDrafts]=useState<Record<string,string>>({});
   const [newConfigKey,setNewConfigKey]=useState("");
   const [newConfigValue,setNewConfigValue]=useState('""');
   const [newConfigPublic,setNewConfigPublic]=useState(true);
@@ -72,6 +75,12 @@ function AdminPage() {
       setSupportTickets(tickets.data??[]);setBuyerReviews(reviews.data??[]);
       setPaidOrders(orders.data??[]);setPlatformRevenue(revenue.data??[]);setAttributions(campaigns.data??[]);
       setAppConfig(config.data??[]);setConfigDrafts(Object.fromEntries((config.data??[]).map(row=>[row.key,JSON.stringify(row.value,null,2)])));
+      if(role==="admin"){
+        const {data:userData,error:userError}=await supabase.functions.invoke("marketplace-finance",{body:{action:"list_users"}});
+        if(userError)throw userError;if(userData?.error)throw new Error(userData.error);
+        setUserDirectory(userData.users??[]);
+        setRoleDrafts(Object.fromEntries((userData.users??[]).map((account:{id:string;role:string})=>[account.id,account.role])));
+      }
     }catch(e){setError(e instanceof Error?e.message:"Unable to load admin workspace.");}
     finally{setLoading(false);}
   }
@@ -186,6 +195,17 @@ function AdminPage() {
     finally{setFinanceBusy(false);}
   }
 
+  async function updateUserRole(userId:string){
+    const role=roleDrafts[userId]??"buyer";
+    setFinanceBusy(true);setError("");setNotice("");
+    try{
+      const {data,error:invokeError}=await supabase.functions.invoke("marketplace-finance",{body:{action:"set_user_role",userId,role}});
+      if(invokeError)throw new Error(invokeError.message);if(data?.error)throw new Error(data.error);
+      setNotice(`User role updated to ${role}.`);await load();
+    }catch(e){setError(e instanceof Error?e.message:"Could not update user role.");}
+    finally{setFinanceBusy(false);}
+  }
+
   async function saveConfig(key:string,valueText:string,isPublic:boolean){
     setError("");setNotice("");
     try{
@@ -253,6 +273,7 @@ function AdminPage() {
               <div className="mt-4 flex flex-wrap gap-2"><button onClick={()=>void review(item,"approved")} className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground">Approve{role==="admin"?" & publish":""}</button><button onClick={()=>void review(item,"changes_requested")} className="rounded-lg border border-border px-3 py-2 text-sm">Request changes</button><button onClick={()=>void review(item,"rejected")} className="rounded-lg border border-destructive/50 px-3 py-2 text-sm text-destructive">Reject</button></div>
             </article>)}</div>}
           </section>
+          {role==="admin"&&<section className="mt-10"><h2 className="text-xl font-bold">User access & roles</h2><p className="mt-1 text-sm text-muted-foreground">Manage roles through protected Supabase Auth app metadata. User-editable profile metadata is never used for authorization.</p><input value={userFilter} onChange={e=>setUserFilter(e.target.value)} className="mt-3 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" placeholder="Filter users by email…" /><div className="mt-3 space-y-2">{userDirectory.filter(account=>(account.email??"").toLowerCase().includes(userFilter.toLowerCase())).slice(0,100).map(account=><div key={account.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-3"><div><p className="text-sm font-semibold">{account.email??"No email"}</p><p className="text-xs text-muted-foreground">Joined {new Date(account.created_at).toLocaleDateString()} · {account.id.slice(0,8)}</p></div><div className="flex items-center gap-2"><select value={roleDrafts[account.id]??account.role} onChange={e=>setRoleDrafts(v=>({...v,[account.id]:e.target.value}))} className="rounded-lg border border-input bg-background px-2 py-2 text-xs"><option value="buyer">Buyer</option><option value="creator">Creator</option><option value="reviewer">Reviewer</option><option value="admin">Admin</option></select><button disabled={financeBusy||roleDrafts[account.id]===account.role} onClick={()=>void updateUserRole(account.id)} className="rounded-lg border border-primary px-2.5 py-2 text-xs font-semibold text-primary disabled:opacity-40">Save role</button></div></div>)}</div></section>}
           {role==="admin"&&<section className="mt-10"><h2 className="text-xl font-bold">Platform configuration</h2><p className="mt-1 text-sm text-muted-foreground">Manage JSON configuration values without changing application code. Never store API secrets here.</p>
             <form onSubmit={createConfig} className="mt-4 grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-[1fr_1.5fr_auto]"><label className="block text-sm font-medium">Key<input value={newConfigKey} onChange={e=>setNewConfigKey(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" placeholder="homepage.hero.title" /></label><label className="block text-sm font-medium">JSON value<textarea value={newConfigValue} onChange={e=>setNewConfigValue(e.target.value)} className="mt-1 min-h-16 w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-xs" /></label><div className="flex flex-col justify-end gap-2"><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={newConfigPublic} onChange={e=>setNewConfigPublic(e.target.checked)} /> Public</label><button className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground">Add / save key</button></div></form>
             <div className="mt-4 space-y-3">{appConfig.map(row=><div key={row.key} className="rounded-xl border border-border bg-card p-4"><div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-sm">{row.key}</strong><span className="text-xs text-muted-foreground">{row.is_public?"Public":"Admin only"}</span></div><textarea value={configDrafts[row.key]??""} onChange={e=>setConfigDrafts(v=>({...v,[row.key]:e.target.value}))} className="mt-3 min-h-20 w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-xs" /><button onClick={()=>void saveConfig(row.key,configDrafts[row.key]??"null",row.is_public)} className="mt-2 rounded-lg border border-primary px-3 py-2 text-xs font-semibold text-primary">Save JSON</button></div>)}</div>
