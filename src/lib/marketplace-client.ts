@@ -184,6 +184,9 @@ export async function updateProductDetails(args: {
   priceAmount: number;
   currency: string;
   tags: string[];
+  compareAtPriceAmount?: number | null;
+  discountStartsAt?: string | null;
+  discountEndsAt?: string | null;
 }) {
   await requireUser();
   const { data, error } = await supabase.from("marketplace_products").update({
@@ -192,6 +195,9 @@ export async function updateProductDetails(args: {
     description: args.description,
     category: args.category,
     price_amount: Math.max(0,Math.round(args.priceAmount)),
+    compare_at_price_amount: args.compareAtPriceAmount ?? null,
+    discount_starts_at: args.discountStartsAt ?? null,
+    discount_ends_at: args.discountEndsAt ?? null,
     currency: args.currency.toUpperCase(),
     tags: args.tags.slice(0,20),
     status: "draft",
