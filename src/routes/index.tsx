@@ -21,10 +21,10 @@ export const Route = createFileRoute("/")({
         content:
           "Create AI prompts, prepare marketplace products, and build a creator business with quality and verification controls.",
       },
-      { property: "og:title", content: "PromptBase Pro Listing Generator" },
+      { property: "og:title", content: "Listingen — Creator Commerce" },
       {
         property: "og:description",
-        content: "Answer a few guided questions and get a copy-paste-ready, guideline-compliant PromptBase listing.",
+        content: "Create, verify, publish and sell AI prompts and digital products.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -140,12 +140,11 @@ function Index() {
   return (
     <main className="min-h-screen bg-background px-4 py-10 text-foreground sm:px-6">
       <div className="mx-auto max-w-2xl">
-        <p className="font-mono text-xs uppercase tracking-[0.3em] text-primary">PromptBase seller tool</p>
-        <h1 className="mt-2 text-4xl font-black tracking-tight sm:text-5xl">Listing Generator</h1>
-        <p className="mt-3 text-muted-foreground">
-          Answer a few guided questions. Get a complete, guideline-compliant listing you can paste into PromptBase in
-          under two minutes.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><p className="font-mono text-xs uppercase tracking-[0.3em] text-primary">Listingen · Creator commerce</p><h1 className="mt-2 text-4xl font-black tracking-tight sm:text-5xl">Create. Verify. Sell.</h1></div>
+          <nav className="flex flex-wrap gap-3 text-sm"><Link to="/marketplace" className="text-muted-foreground hover:text-foreground">Marketplace</Link><Link to="/studio" className="text-muted-foreground hover:text-foreground">Creator Studio</Link><Link to="/account" className="text-muted-foreground hover:text-foreground">My account</Link><Link to="/login" className="rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground">Sign in</Link></nav>
+        </div>
+        <p className="mt-3 text-muted-foreground">Generate high-quality prompts, save your work, prepare marketplace products, and build a creator business without leaving Listingen.</p>
 
         <section className="mt-6 rounded-xl border border-primary/40 bg-primary/5 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
