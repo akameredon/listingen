@@ -62,12 +62,38 @@ export function assessPromptPackage(input: PromptAssessmentInput): PromptAssessm
   const placeholderCount=(input.promptContent.match(/\[[^\]]{1,80}\]/g)??[]).length;
   if(placeholderCount>0)passed.push("customizable_placeholders");
   else missing.push("customizable_placeholders_or_explicit_fixed_input");
-  const hasUsageSteps=/(?:^|\n)\s*(?:\d+[.)]|[-*])\s+\S/m.test(input.instructions);
+  const hasUsageSteps=/(?:^|
+)\s*(?:\d+[.)]|[-*])\s+\S/m.test(input.instructions);
   if(hasUsageSteps)passed.push("step_by_step_instructions");
   else missing.push("step_by_step_instructions");
 
+  const rawUrls = [...new Set([input.description,input.promptContent,input.instructions].join("
+").match(/https?:\/\/[^\s<>"')\]]+/gi) ?? [])].slice(0,30);
+  const links = rawUrls.map((raw) => {
+    const candidate = raw.replace(/[.,;!?]+$/, "");
+    try {
+      const url = new URL(candidate);
+      const host = url.hostname.toLowerCase();
+      const privateHost = host === "localhost" || host.endsWith(".local") || host === "metadata.google.internal" ||
+        /^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host) ||
+        /^169\.254\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+        host === "0.0.0.0" || host === "::1";
+      const valid = (url.protocol === "https:" || url.protocol === "http:") && !url.username && !url.password && !privateHost;
+      return { url: candidate, valid, reason: !valid ? "Unsupported scheme, credentials or private/local host." : url.protocol === "http:" ? "Valid URL syntax; HTTPS is preferred." : "Valid HTTPS URL syntax; network reachability not checked." };
+    } catch {
+      return { url: candidate, valid: false, reason: "Invalid URL syntax." };
+    }
+  });
+  const sourceValidation = {
+    links,
+    validCount: links.filter(link=>link.valid).length,
+    invalidCount: links.filter(link=>!link.valid).length,
+    networkReachabilityChecked: false as const,
+  };
+
   const flags=riskyPatterns.filter(([pattern])=>pattern.test(
-    [input.title,input.shortDescription,input.description,input.promptContent,input.instructions].join("\n")
+    [input.title,input.shortDescription,input.description,input.promptContent,input.instructions].join("
+")
   )).map(([,label])=>label);
   const scoreBase=Math.round((passed.length/(passed.length+missing.length||1))*100);
   const qualityScore=Math.max(0,Math.min(100,scoreBase-flags.length*12));
