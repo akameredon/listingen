@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { extractMeta } from "@/lib/listing-client";
-import type { ListingInput } from "@/lib/listing";\nimport { assessPromptPackage } from "@/lib/verification";
+import type { ListingInput } from "@/lib/listing";
+import { assessPromptPackage } from "@/lib/verification";
 
 export type ListingRow = {
   id: string;
