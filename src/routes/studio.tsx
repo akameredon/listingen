@@ -37,23 +37,26 @@ function CreatorStudio() {
   const [payoutCurrency,setPayoutCurrency] = useState("USD");
   const [payoutAccountId,setPayoutAccountId] = useState("");
   const [financeBusy,setFinanceBusy] = useState(false);
+  const [referralCodes,setReferralCodes] = useState<Array<{id:string;code:string;is_active:boolean}>>([]);
 
   async function refresh() {
     setLoading(true); setError("");
     try {
       const {data:userData,error:userError}=await supabase.auth.getUser();
       if(userError||!userData.user)throw new Error("Sign in to continue.");
-      const [drafts,items,profileResult,ledgerResult,accountResult,payoutResult] = await Promise.all([
+      const [drafts,items,profileResult,ledgerResult,accountResult,payoutResult,referralResult] = await Promise.all([
         getMyListings(),getMyProducts(),
         supabase.from("creator_profiles").select("slug,headline,about").eq("user_id",userData.user.id).maybeSingle(),
         supabase.from("ledger_entries").select("id,amount,currency,entry_type,created_at").order("created_at",{ascending:false}).limit(100),
         supabase.from("payout_accounts").select("id,provider,provider_account_ref,account_label,status").order("created_at",{ascending:false}),
         supabase.from("payout_requests").select("id,amount,currency,status,requested_at").order("requested_at",{ascending:false}).limit(50),
+        supabase.from("referral_codes").select("id,code,is_active").order("created_at",{ascending:false}),
       ]);
       if(profileResult.error)throw profileResult.error;
       if(ledgerResult.error)throw ledgerResult.error;
       if(accountResult.error)throw accountResult.error;
       if(payoutResult.error)throw payoutResult.error;
+      if(referralResult.error)throw referralResult.error;
       setListings(drafts); setProducts(items);
       setCreatorSlug(profileResult.data?.slug??`creator-${userData.user.id.slice(0,8)}`);
       setHeadline(profileResult.data?.headline??"");
@@ -62,6 +65,7 @@ function CreatorStudio() {
       setLedger(ledgerResult.data??[]);
       setPayoutAccounts(accountResult.data??[]);
       setPayouts(payoutResult.data??[]);
+      setReferralCodes(referralResult.data??[]);
       if(!payoutAccountId&&accountResult.data?.length)setPayoutAccountId(accountResult.data.find(a=>a.status==="verified")?.id??"");
     } catch (e) {
       if (e instanceof Error && e.message.includes("Sign in")) await navigate({to:"/login"});
@@ -76,6 +80,27 @@ function CreatorStudio() {
     });
     return () => data.subscription.unsubscribe();
   }, []);
+
+  async function createReferralCode(){
+    setError("");setNotice("");
+    try{
+      const {data,error:authError}=await supabase.auth.getUser();if(authError||!data.user)throw new Error("Sign in to continue.");
+      const code=`LIST-${crypto.randomUUID().slice(0,8).toUpperCase()}`;
+      const {error:insertError}=await supabase.from("referral_codes").insert({owner_id:data.user.id,code,is_active:true});
+      if(insertError)throw insertError;
+      setNotice("Referral code created. Use it in your product links to attribute sales.");
+      await refresh();
+    }catch(e){setError(e instanceof Error?e.message:"Could not create referral code.");}
+  }
+
+  async function copyShareLink(product:ProductRow,kind:"link"|"social"){
+    const code=referralCodes.find(r=>r.is_active)?.code;
+    if(!code){setError("Create a referral code before sharing tracked links.");return;}
+    const url=`${window.location.origin}/product/${product.slug}?ref=${encodeURIComponent(code)}&utm_source=creator&utm_medium=social&utm_campaign=listingen`;
+    const text=kind==="link"?url:`I created “${product.title}” to help with ${product.short_description.toLowerCase()} Explore it on Listingen: ${url}`;
+    await navigator.clipboard.writeText(text);
+    setNotice(kind==="link"?"Tracked product link copied.":"Social caption and tracked link copied.");
+  }
 
   async function addPayoutAccount(event:React.FormEvent<HTMLFormElement>) {
     event.preventDefault();setError("");setNotice("");
@@ -199,6 +224,12 @@ function CreatorStudio() {
             </form>
           </div>
           <div className="mt-4 rounded-lg bg-muted p-4"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ledger balance</p><div className="mt-2 flex flex-wrap gap-4">{["USD","NGN","GBP","EUR"].map(currency=>{const total=ledger.filter(x=>x.currency===currency).reduce((sum,x)=>sum+x.amount,0);const reserved=payouts.filter(x=>x.currency===currency&&["requested","approved","processing"].includes(x.status)).reduce((sum,x)=>sum+x.amount,0);return <p key={currency} className="text-sm"><strong>{(total-reserved)/100}</strong> {currency}</p>;})}</div></div>
+        </section>
+
+        <section className="mt-6 rounded-xl border border-border bg-card p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold">Marketing & distribution</h2><p className="mt-1 text-sm text-muted-foreground">Create tracked referral links and copy social captions for published products.</p></div><button onClick={()=>void createReferralCode()} className="rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary">Create referral code</button></div>
+          <div className="mt-3 flex flex-wrap gap-2">{referralCodes.map(code=><span key={code.id} className="rounded-full bg-muted px-3 py-1.5 text-xs">{code.code} · {code.is_active?"Active":"Inactive"}</span>)}</div>
+          {products.filter(p=>p.status==="published").length===0?<p className="mt-4 text-sm text-muted-foreground">Published products will appear here with share links.</p>:<div className="mt-4 space-y-2">{products.filter(p=>p.status==="published").map(product=><div key={product.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"><div><p className="font-semibold">{product.title}</p><p className="text-xs text-muted-foreground">{product.category}</p></div><div className="flex flex-wrap gap-2"><button onClick={()=>void copyShareLink(product,"link")} className="rounded border border-border px-2.5 py-1.5 text-xs">Copy tracked link</button><button onClick={()=>void copyShareLink(product,"social")} className="rounded border border-primary px-2.5 py-1.5 text-xs text-primary">Copy social caption</button></div></div>)}</div>}
         </section>
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-bold">Your prompt library</h2><Link to="/" className="rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground">Create a prompt</Link></div>
