@@ -91,7 +91,7 @@ function Index() {
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [phase, setPhase] = useState<"form" | "result">("form");
+  const [phase, setPhase] = useState<"form" | "result">("form");\n  const [saving, setSaving] = useState(false);\n  const [saved, setSaved] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const current = STEPS[step]!;
@@ -106,32 +106,28 @@ function Index() {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     try {
-      const res = await fetch("/api/listing", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(v),
+      const result = await streamListing(v, {
         signal: ctrl.signal,
+        onChunk: (all) => setOutput(all),
       });
-      if (!res.ok || !res.body) {
-        const raw = (await res.text().catch(() => "")).trim();
-        const looksHtml = raw.startsWith("<") || raw.length > 300;
-        throw new Error(
-          looksHtml || !raw
-            ? "The server was briefly unavailable. Please press Try again in a few seconds."
-            : raw,
-        );
-      }
-      const reader = res.body.getReader();
-      const dec = new TextDecoder();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        setOutput((o) => o + dec.decode(value, { stream: true }));
-      }
+      if (!result.trim()) throw new Error("The AI returned an empty answer. Please try again.");
     } catch (e) {
       if ((e as Error).name !== "AbortError") setError((e as Error).message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const saveCurrentListing = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      await saveListing(v, output);
+      setSaved(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save this prompt. Sign in and try again.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -221,6 +217,8 @@ function Index() {
               <h2 className="text-2xl font-bold">Your listing</h2>
               <div className="flex gap-2">
                 {output && !loading && <CopyBtn text={output} label="Copy all" />}
+                {output && !loading && !saved && <button onClick={saveCurrentListing} disabled={saving} className="rounded-md border border-primary px-3 py-1.5 text-xs font-semibold text-primary disabled:opacity-50">{saving ? "Saving…" : "Save to Creator Studio"}</button>}
+                {saved && <span className="self-center text-xs font-semibold text-primary">Saved to your library</span>}
                 <button
                   onClick={() => {
                     abortRef.current?.abort();
