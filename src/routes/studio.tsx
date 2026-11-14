@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  createProductFromListing, createProductVersion, getMyListings, getMyProducts, submitProductForReview,
+  createProductFromListing, createProductVersion, duplicateListingDraft, getMyListings, getMyProducts, submitProductForReview, updateListingDraft,
   type ListingRow, type ProductRow,
 } from "@/lib/marketplace-client";
 
@@ -43,6 +43,12 @@ function CreatorStudio() {
   const [versionPrompt,setVersionPrompt] = useState("");
   const [versionInstructions,setVersionInstructions] = useState("");
   const [versionChangelog,setVersionChangelog] = useState("");
+  const [editingListingId,setEditingListingId] = useState<string|null>(null);
+  const [draftTitle,setDraftTitle] = useState("");
+  const [draftIdea,setDraftIdea] = useState("");
+  const [draftOutput,setDraftOutput] = useState("");
+  const [draftFolder,setDraftFolder] = useState("Uncategorized");
+  const [draftTags,setDraftTags] = useState("");
 
   async function refresh() {
     setLoading(true); setError("");
@@ -177,6 +183,25 @@ function CreatorStudio() {
     } catch(e) { setError(e instanceof Error ? e.message : "Could not create product."); }
   }
 
+  function beginEditListing(listing:ListingRow){
+    setEditingListingId(listing.id);setDraftTitle(listing.title);setDraftIdea(listing.idea);
+    setDraftOutput(listing.output);setDraftFolder(listing.folder||"Uncategorized");setDraftTags((listing.tags??[]).join(", "));
+  }
+
+  async function saveEditedListing(listing:ListingRow){
+    setError("");setNotice("");
+    try{
+      await updateListingDraft({id:listing.id,title:draftTitle,idea:draftIdea,output:draftOutput,folder:draftFolder,tags:draftTags.split(",").map(t=>t.trim()).filter(Boolean)});
+      setEditingListingId(null);setNotice("Prompt draft updated.");await refresh();
+    }catch(e){setError(e instanceof Error?e.message:"Could not update draft.");}
+  }
+
+  async function duplicateDraft(listing:ListingRow){
+    setError("");setNotice("");
+    try{await duplicateListingDraft(listing);setNotice("Prompt draft duplicated.");await refresh();}
+    catch(e){setError(e instanceof Error?e.message:"Could not duplicate draft.");}
+  }
+
   function beginNewVersion(product:ProductRow){
     const current=versionHistory[product.id]?.[0];
     setEditingVersion(product.id);
@@ -270,13 +295,21 @@ function CreatorStudio() {
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             {listings.map(listing=><article key={listing.id} className="rounded-xl border border-border bg-card p-5">
               <div className="flex items-start justify-between gap-3"><div><h3 className="font-bold">{listing.title}</h3><p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{listing.idea}</p></div><span className="rounded-full bg-muted px-2.5 py-1 text-xs">{listing.status}</span></div>
-              <p className="mt-3 text-xs text-muted-foreground">Saved {new Date(listing.created_at).toLocaleDateString()}</p>
+              <p className="mt-3 text-xs text-muted-foreground">Folder: {listing.folder||"Uncategorized"} · Saved {new Date(listing.created_at).toLocaleDateString()}</p>
+              {listing.tags?.length>0&&<div className="mt-2 flex flex-wrap gap-1">{listing.tags.map(tag=><span key={tag} className="rounded bg-muted px-2 py-1 text-[11px]">{tag}</span>)}</div>}
+              {editingListingId===listing.id?<div className="mt-4 space-y-3 border-t border-border pt-4">
+                <label className="block text-sm font-medium">Title<input value={draftTitle} onChange={e=>setDraftTitle(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" /></label>
+                <label className="block text-sm font-medium">Idea<textarea value={draftIdea} onChange={e=>setDraftIdea(e.target.value)} className="mt-1 min-h-16 w-full rounded-lg border border-input bg-background px-3 py-2" /></label>
+                <label className="block text-sm font-medium">Full prompt package<textarea value={draftOutput} onChange={e=>setDraftOutput(e.target.value)} className="mt-1 min-h-48 w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-xs" /></label>
+                <div className="grid gap-3 sm:grid-cols-2"><label className="block text-sm font-medium">Folder<input value={draftFolder} onChange={e=>setDraftFolder(e.target.value)} maxLength={60} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" /></label><label className="block text-sm font-medium">Tags (comma separated)<input value={draftTags} onChange={e=>setDraftTags(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" /></label></div>
+                <div className="flex gap-2"><button onClick={()=>void saveEditedListing(listing)} className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground">Save changes</button><button onClick={()=>setEditingListingId(null)} className="rounded-lg border border-border px-3 py-2 text-sm">Cancel</button></div>
+              </div>:null}
               {creating===listing.id ? <div className="mt-4 space-y-3 border-t border-border pt-4">
                 <label className="block text-sm font-medium">Marketplace category<select value={category} onChange={e=>setCategory(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2">{categories.map(c=><option key={c}>{c}</option>)}</select></label>
                 <label className="block text-sm font-medium">Price (USD)<input inputMode="decimal" value={price} onChange={e=>setPrice(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" placeholder="4.99" /></label>
                 <label className="block text-sm font-medium">Buyer-focused summary<textarea value={shortDescription} onChange={e=>setShortDescription(e.target.value)} className="mt-1 min-h-20 w-full rounded-lg border border-input bg-background px-3 py-2" placeholder="What problem does this prompt solve for buyers?" /></label>
                 <div className="flex gap-2"><button onClick={()=>void createProduct(listing)} className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground">Create product draft</button><button onClick={()=>setCreating(null)} className="rounded-lg border border-border px-3 py-2 text-sm">Cancel</button></div>
-              </div> : <div className="mt-4 flex flex-wrap gap-2"><button onClick={()=>{setCreating(listing.id);setShortDescription("");}} className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Prepare marketplace product</button><button onClick={()=>navigator.clipboard.writeText(listing.output)} className="rounded-lg border border-border px-3 py-2 text-sm">Copy full prompt package</button></div>}
+              </div> : <div className="mt-4 flex flex-wrap gap-2"><button onClick={()=>{setCreating(listing.id);setShortDescription("");}} className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Prepare marketplace product</button><button onClick={()=>beginEditListing(listing)} className="rounded-lg border border-border px-3 py-2 text-sm">Edit / organize</button><button onClick={()=>void duplicateDraft(listing)} className="rounded-lg border border-border px-3 py-2 text-sm">Duplicate</button><button onClick={()=>navigator.clipboard.writeText(listing.output)} className="rounded-lg border border-border px-3 py-2 text-sm">Copy full prompt package</button></div>}
             </article>)}
           </div>
         )}
