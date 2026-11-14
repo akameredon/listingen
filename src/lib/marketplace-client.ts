@@ -175,6 +175,32 @@ export async function createProductFromListing(args: {
   return { ...product, current_version_id: version.id } as ProductRow;
 }
 
+export async function updateProductDetails(args: {
+  productId: string;
+  title: string;
+  shortDescription: string;
+  description: string;
+  category: string;
+  priceAmount: number;
+  currency: string;
+  tags: string[];
+}) {
+  await requireUser();
+  const { data, error } = await supabase.from("marketplace_products").update({
+    title: args.title.trim().slice(0,160),
+    short_description: args.shortDescription.trim().slice(0,240),
+    description: args.description,
+    category: args.category,
+    price_amount: Math.max(0,Math.round(args.priceAmount)),
+    currency: args.currency.toUpperCase(),
+    tags: args.tags.slice(0,20),
+    status: "draft",
+    published_at: null,
+  }).eq("id",args.productId).select("*").single();
+  if(error)throw error;
+  return data as ProductRow;
+}
+
 export async function createProductVersion(args: {
   productId: string;
   promptContent: string;
