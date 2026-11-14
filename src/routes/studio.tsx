@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  createProductFromListing, getMyListings, getMyProducts, submitProductForReview,
+  createProductFromListing, createProductVersion, getMyListings, getMyProducts, submitProductForReview,
   type ListingRow, type ProductRow,
 } from "@/lib/marketplace-client";
 
@@ -38,6 +38,11 @@ function CreatorStudio() {
   const [payoutAccountId,setPayoutAccountId] = useState("");
   const [financeBusy,setFinanceBusy] = useState(false);
   const [referralCodes,setReferralCodes] = useState<Array<{id:string;code:string;is_active:boolean}>>([]);
+  const [versionHistory,setVersionHistory] = useState<Record<string,Array<{id:string;version_number:number;verification_state:string;created_at:string;prompt_content:string;instructions:string}>>>({});
+  const [editingVersion,setEditingVersion] = useState<string|null>(null);
+  const [versionPrompt,setVersionPrompt] = useState("");
+  const [versionInstructions,setVersionInstructions] = useState("");
+  const [versionChangelog,setVersionChangelog] = useState("");
 
   async function refresh() {
     setLoading(true); setError("");
@@ -66,6 +71,15 @@ function CreatorStudio() {
       setPayoutAccounts(accountResult.data??[]);
       setPayouts(payoutResult.data??[]);
       setReferralCodes(referralResult.data??[]);
+      if(items.length){
+        const {data:versions,error:versionError}=await supabase.from("product_versions")
+          .select("id,product_id,version_number,verification_state,created_at,prompt_content,instructions")
+          .in("product_id",items.map(item=>item.id)).order("version_number",{ascending:false});
+        if(versionError)throw versionError;
+        const grouped:Record<string,Array<{id:string;version_number:number;verification_state:string;created_at:string;prompt_content:string;instructions:string}>>={};
+        for(const version of versions??[]){(grouped[version.product_id]??=[]).push(version);}
+        setVersionHistory(grouped);
+      }else setVersionHistory({});
       if(!payoutAccountId&&accountResult.data?.length)setPayoutAccountId(accountResult.data.find(a=>a.status==="verified")?.id??"");
     } catch (e) {
       if (e instanceof Error && e.message.includes("Sign in")) await navigate({to:"/login"});
@@ -163,6 +177,23 @@ function CreatorStudio() {
     } catch(e) { setError(e instanceof Error ? e.message : "Could not create product."); }
   }
 
+  function beginNewVersion(product:ProductRow){
+    const current=versionHistory[product.id]?.[0];
+    setEditingVersion(product.id);
+    setVersionPrompt(current?.prompt_content??"");
+    setVersionInstructions(current?.instructions??"");
+    setVersionChangelog("");
+  }
+
+  async function saveNewVersion(product:ProductRow){
+    setError("");setNotice("");
+    try{
+      const version=await createProductVersion({productId:product.id,promptContent:versionPrompt,instructions:versionInstructions,changelog:versionChangelog});
+      setEditingVersion(null);setNotice(`Version ${version.version_number} saved as a new draft. Submit it for review before it can be published.`);
+      await refresh();
+    }catch(e){setError(e instanceof Error?e.message:"Could not create product version.");}
+  }
+
   async function submit(product: ProductRow) {
     if (!product.current_version_id) { setError("This product needs a saved prompt version before review."); return; }
     try {
@@ -251,7 +282,16 @@ function CreatorStudio() {
         )}
 
         <section className="mt-10"><h2 className="text-xl font-bold">Marketplace products</h2><p className="mt-1 text-sm text-muted-foreground">Every product moves through draft, review and publication. Saving or submitting never publishes automatically.</p>
-          {products.length===0 ? <p className="mt-4 rounded-xl border border-border p-5 text-sm text-muted-foreground">No products yet. Prepare a product from one of your saved prompts above.</p> : <div className="mt-4 grid gap-3 md:grid-cols-2">{products.map(product=><article key={product.id} className="rounded-xl border border-border bg-card p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-bold">{product.title}</h3><p className="mt-1 text-sm text-muted-foreground">{product.category} · {(product.price_amount/100).toFixed(2)} {product.currency}</p></div><span className="rounded-full bg-muted px-2.5 py-1 text-xs">{product.status.replace("_"," ")}</span></div>{product.status==="draft"||product.status==="rejected" ? <button onClick={()=>void submit(product)} className="mt-3 rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary">Submit for review</button> : null}</article>)}</div>}
+          {products.length===0 ? <p className="mt-4 rounded-xl border border-border p-5 text-sm text-muted-foreground">No products yet. Prepare a product from one of your saved prompts above.</p> : <div className="mt-4 grid gap-3 md:grid-cols-2">{products.map(product=><article key={product.id} className="rounded-xl border border-border bg-card p-4">
+              <div className="flex items-start justify-between gap-3"><div><h3 className="font-bold">{product.title}</h3><p className="mt-1 text-sm text-muted-foreground">{product.category} · {(product.price_amount/100).toFixed(2)} {product.currency}</p></div><span className="rounded-full bg-muted px-2.5 py-1 text-xs">{product.status.replace("_"," ")}</span></div>
+              <div className="mt-3 flex flex-wrap gap-2">{(versionHistory[product.id]??[]).map(v=><span key={v.id} className="rounded bg-muted px-2 py-1 text-[11px]">v{v.version_number} · {v.verification_state}</span>)}</div>
+              {editingVersion===product.id?<div className="mt-4 space-y-3 border-t border-border pt-4">
+                <label className="block text-sm font-medium">New prompt version<textarea value={versionPrompt} onChange={e=>setVersionPrompt(e.target.value)} className="mt-1 min-h-36 w-full rounded-lg border border-input bg-background px-3 py-2" /></label>
+                <label className="block text-sm font-medium">Usage instructions<textarea value={versionInstructions} onChange={e=>setVersionInstructions(e.target.value)} className="mt-1 min-h-20 w-full rounded-lg border border-input bg-background px-3 py-2" /></label>
+                <label className="block text-sm font-medium">Change log<textarea value={versionChangelog} onChange={e=>setVersionChangelog(e.target.value)} className="mt-1 min-h-16 w-full rounded-lg border border-input bg-background px-3 py-2" placeholder="What changed in this version?" /></label>
+                <div className="flex gap-2"><button onClick={()=>void saveNewVersion(product)} className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground">Save new version</button><button onClick={()=>setEditingVersion(null)} className="rounded-lg border border-border px-3 py-2 text-sm">Cancel</button></div>
+              </div>:<div className="mt-3 flex flex-wrap gap-2"><button onClick={()=>beginNewVersion(product)} className="rounded-lg border border-border px-3 py-2 text-sm">Create new version</button>{product.status==="draft"||product.status==="rejected"?<button onClick={()=>void submit(product)} className="rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary">Submit for review</button>:null}</div>}
+            </article>)}</div>}
         </section>
       </div>
     </main>
