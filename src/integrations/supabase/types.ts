@@ -210,6 +210,7 @@ export type Database = {
           description: string
           entry_type: string
           id: string
+          payout_request_id: string | null
           purchase_item_id: string | null
           user_id: string
         }
@@ -221,6 +222,7 @@ export type Database = {
           description?: string
           entry_type: string
           id?: string
+          payout_request_id?: string | null
           purchase_item_id?: string | null
           user_id: string
         }
@@ -232,6 +234,7 @@ export type Database = {
           description?: string
           entry_type?: string
           id?: string
+          payout_request_id?: string | null
           purchase_item_id?: string | null
           user_id?: string
         }
@@ -241,6 +244,13 @@ export type Database = {
             columns: ["commission_rule_id"]
             isOneToOne: false
             referencedRelation: "commission_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ledger_entries_payout_request_id_fkey"
+            columns: ["payout_request_id"]
+            isOneToOne: false
+            referencedRelation: "payout_requests"
             referencedColumns: ["id"]
           },
           {
@@ -375,6 +385,33 @@ export type Database = {
           },
         ]
       }
+      payment_events: {
+        Row: {
+          event_type: string
+          id: string
+          payload_hash: string | null
+          processed_at: string
+          provider: string
+          provider_event_id: string
+        }
+        Insert: {
+          event_type: string
+          id?: string
+          payload_hash?: string | null
+          processed_at?: string
+          provider: string
+          provider_event_id: string
+        }
+        Update: {
+          event_type?: string
+          id?: string
+          payload_hash?: string | null
+          processed_at?: string
+          provider?: string
+          provider_event_id?: string
+        }
+        Relationships: []
+      }
       payout_accounts: {
         Row: {
           account_label: string | null
@@ -454,6 +491,54 @@ export type Database = {
             columns: ["payout_account_id"]
             isOneToOne: false
             referencedRelation: "payout_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_revenue_entries: {
+        Row: {
+          amount: number
+          commission_rule_id: string | null
+          created_at: string
+          currency: string
+          description: string
+          entry_type: string
+          id: string
+          purchase_item_id: string | null
+        }
+        Insert: {
+          amount: number
+          commission_rule_id?: string | null
+          created_at?: string
+          currency: string
+          description?: string
+          entry_type: string
+          id?: string
+          purchase_item_id?: string | null
+        }
+        Update: {
+          amount?: number
+          commission_rule_id?: string | null
+          created_at?: string
+          currency?: string
+          description?: string
+          entry_type?: string
+          id?: string
+          purchase_item_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_revenue_entries_commission_rule_id_fkey"
+            columns: ["commission_rule_id"]
+            isOneToOne: false
+            referencedRelation: "commission_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_revenue_entries_purchase_item_id_fkey"
+            columns: ["purchase_item_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_items"
             referencedColumns: ["id"]
           },
         ]
@@ -591,6 +676,7 @@ export type Database = {
       }
       purchase_items: {
         Row: {
+          commission_rule_id: string | null
           created_at: string
           creator_amount: number
           creator_id: string
@@ -604,6 +690,7 @@ export type Database = {
           version_id: string
         }
         Insert: {
+          commission_rule_id?: string | null
           created_at?: string
           creator_amount?: number
           creator_id: string
@@ -617,6 +704,7 @@ export type Database = {
           version_id: string
         }
         Update: {
+          commission_rule_id?: string | null
           created_at?: string
           creator_amount?: number
           creator_id?: string
@@ -630,6 +718,13 @@ export type Database = {
           version_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "purchase_items_commission_rule_id_fkey"
+            columns: ["commission_rule_id"]
+            isOneToOne: false
+            referencedRelation: "commission_rules"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "purchase_items_product_id_fkey"
             columns: ["product_id"]
@@ -888,7 +983,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      request_creator_payout: {
+        Args: {
+          p_amount: number
+          p_currency: string
+          p_payout_account_id: string
+          p_user_id: string
+        }
+        Returns: {
+          amount: number
+          available_balance: number
+          currency: string
+          id: string
+          requested_at: string
+          status: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
