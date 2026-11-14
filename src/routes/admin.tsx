@@ -9,7 +9,8 @@ export const Route = createFileRoute("/admin")({
 
 type QueueItem = {
   id: string; product_id: string; version_id: string; submitted_by: string;
-  status: string; submitted_at: string;
+  status: string; submitted_at: string; quality_score: number | null;
+  completeness_report: unknown; originality_report: unknown; compliance_report: unknown; reproducibility_report: unknown;
   marketplace_products: { title: string; slug: string } | null;
   product_versions: { prompt_content: string; verification_state: string; verification_evidence: unknown } | null;
 };
@@ -39,7 +40,7 @@ function AdminPage() {
       setRole(currentRole);
       if(!["admin","reviewer"].includes(currentRole)){setLoading(false);return;}
       const [q,r]=await Promise.all([
-        supabase.from("review_submissions").select("id,product_id,version_id,submitted_by,status,submitted_at,marketplace_products(title,slug),product_versions(prompt_content,verification_state,verification_evidence)").in("status",["pending","in_progress"]).order("submitted_at",{ascending:true}),
+        supabase.from("review_submissions").select("id,product_id,version_id,submitted_by,status,submitted_at,quality_score,completeness_report,originality_report,compliance_report,reproducibility_report,marketplace_products(title,slug),product_versions(prompt_content,verification_state,verification_evidence)").in("status",["pending","in_progress"]).order("submitted_at",{ascending:true}),
         supabase.from("commission_rules").select("id,name,currency,platform_fee_bps,creator_share_bps,is_active").order("created_at",{ascending:false})
       ]);
       if(q.error)throw q.error;if(r.error)throw r.error;
@@ -118,6 +119,10 @@ function AdminPage() {
             {queue.length===0?<p className="mt-4 rounded-xl border border-border p-5 text-sm text-muted-foreground">The review queue is clear.</p>:<div className="mt-4 space-y-4">{queue.map(item=><article key={item.id} className="rounded-xl border border-border bg-card p-5">
               <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-bold">{item.marketplace_products?.title??"Untitled product"}</h3><p className="mt-1 text-xs text-muted-foreground">Submitted {new Date(item.submitted_at).toLocaleString()} · {item.status}</p></div><Link to="/product/$slug" params={{slug:item.marketplace_products?.slug??""}} className="text-sm text-primary underline">Open listing</Link></div>
               <pre className="mt-4 max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-muted p-4 text-xs">{item.product_versions?.prompt_content??"No prompt version found."}</pre>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="rounded-lg bg-muted p-3"><p className="text-xs font-semibold">Automated quality score</p><p className="mt-1 text-2xl font-black">{item.quality_score??"—"}<span className="text-xs font-normal text-muted-foreground"> / 100</span></p></div>
+                <div className="rounded-lg bg-muted p-3"><p className="text-xs font-semibold">Assessment reports</p><pre className="mt-1 max-h-28 overflow-auto whitespace-pre-wrap text-[11px] text-muted-foreground">{JSON.stringify({completeness:item.completeness_report,originality:item.originality_report,compliance:item.compliance_report,reproducibility:item.reproducibility_report},null,2)}</pre></div>
+              </div>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <label className="block text-sm font-medium">Verification classification<select value={verification[item.id]??item.product_versions?.verification_state??"documented"} onChange={e=>setVerification(v=>({...v,[item.id]:e.target.value}))} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2"><option value="documented">Documented — instructions reviewed</option><option value="tested">Tested — executed with evidence</option><option value="reproduced">Reproduced — independently reproduced</option></select></label>
                 <label className="block text-sm font-medium">Evidence / test notes<textarea value={evidence[item.id]??""} onChange={e=>setEvidence(v=>({...v,[item.id]:e.target.value}))} className="mt-1 min-h-20 w-full rounded-lg border border-input bg-background px-3 py-2" placeholder="Describe the tools, inputs, output and test evidence. Required for tested/reproduced." /></label>
