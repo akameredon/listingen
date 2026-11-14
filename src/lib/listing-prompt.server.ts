@@ -96,10 +96,9 @@ export function buildUserMessage(v: ListingInput, revise?: { previous: string; f
     line("competitor_notes", v.competitor_notes),
     line("avoid_topics", v.avoid_topics),
   ].join("\n");
-  if (!revise) return `${base}\\n\\n${specialist}`;
-  return `${base}
-
-A reviewer checked your previous version and found these problems:
+  const specialist = `SPECIALIST GENERATION REQUIREMENTS\n${getSpecialistGuidance(v)}`;
+  if (!revise) return `${base}\n\n${specialist}`;
+  return `${base}\n\n${specialist}\n\nA reviewer checked your previous version and found these problems:
 ${revise.fixes.map((f) => `- ${f}`).join("\n")}
 
 Previous version:
