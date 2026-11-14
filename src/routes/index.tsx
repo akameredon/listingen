@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { streamListing } from "@/lib/listing-client";
 import { saveListing } from "@/lib/marketplace-client";
 import { Check, Copy, Loader2, Sparkles, ArrowLeft, ArrowRight, RotateCcw } from "lucide-react";
@@ -94,6 +95,8 @@ function Index() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [phase, setPhase] = useState<"form" | "result">("form");
+  const [heroTitle,setHeroTitle] = useState("Create. Verify. Sell.");
+  const [heroDescription,setHeroDescription] = useState("Generate high-quality prompts, save your work, prepare marketplace products, and build a creator business without leaving Listingen.");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -135,16 +138,28 @@ function Index() {
     }
   };
 
+  useEffect(() => {
+    let active=true;
+    supabase.from("app_config").select("key,value").in("key",["homepage.hero.title","homepage.hero.description"]).eq("is_public",true).then(({data})=>{
+      if(!active)return;
+      for(const row of data??[]){
+        if(row.key==="homepage.hero.title"&&typeof row.value==="string")setHeroTitle(row.value);
+        if(row.key==="homepage.hero.description"&&typeof row.value==="string")setHeroDescription(row.value);
+      }
+    });
+    return ()=>{active=false;};
+  }, []);
+
   const sections = useMemo(() => splitSections(output), [output]);
 
   return (
     <main className="min-h-screen bg-background px-4 py-10 text-foreground sm:px-6">
       <div className="mx-auto max-w-2xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><p className="font-mono text-xs uppercase tracking-[0.3em] text-primary">Listingen · Creator commerce</p><h1 className="mt-2 text-4xl font-black tracking-tight sm:text-5xl">Create. Verify. Sell.</h1></div>
+          <div><p className="font-mono text-xs uppercase tracking-[0.3em] text-primary">Listingen · Creator commerce</p><h1 className="mt-2 text-4xl font-black tracking-tight sm:text-5xl">{heroTitle}</h1></div>
           <nav className="flex flex-wrap gap-3 text-sm"><Link to="/marketplace" className="text-muted-foreground hover:text-foreground">Marketplace</Link><Link to="/studio" className="text-muted-foreground hover:text-foreground">Creator Studio</Link><Link to="/account" className="text-muted-foreground hover:text-foreground">My account</Link><Link to="/login" className="rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground">Sign in</Link></nav>
         </div>
-        <p className="mt-3 text-muted-foreground">Generate high-quality prompts, save your work, prepare marketplace products, and build a creator business without leaving Listingen.</p>
+        <p className="mt-3 text-muted-foreground">{heroDescription}</p>
 
         <section className="mt-6 rounded-xl border border-primary/40 bg-primary/5 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
