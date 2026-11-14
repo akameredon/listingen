@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
 import { Check, Copy, Loader2, Sparkles, ArrowLeft, ArrowRight, RotateCcw } from "lucide-react";
 import {
@@ -147,6 +147,16 @@ function Index() {
           under two minutes.
         </p>
 
+        <section className="mt-6 rounded-xl border border-primary/40 bg-primary/5 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">New generator</p>
+              <h2 className="mt-1 text-lg font-bold">Creating an app or game?</h2>
+              <p className="mt-1 max-w-xl text-sm text-muted-foreground">Generate agent-specific build prompts for Claude Code, Google Antigravity, Codex and Cursor Agent, plus a PromptBase-ready listing.</p>
+            </div>
+            <Link to="/apps-games" className="rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:opacity-90">Explore Apps & Games →</Link>
+          </div>
+        </section>
         {phase === "form" && (
           <section className="mt-8">
             <div className="flex gap-1.5">
