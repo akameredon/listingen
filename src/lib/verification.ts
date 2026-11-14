@@ -16,6 +16,12 @@ export type PromptAssessment = {
     promptLength: number;
     complete: boolean;
   };
+  sourceValidation: {
+    links: Array<{ url: string; valid: boolean; reason: string }>;
+    validCount: number;
+    invalidCount: number;
+    networkReachabilityChecked: false;
+  };
   originality: {
     method: "exact-match-only";
     exactDuplicateCheck: "not-run";
@@ -33,88 +39,109 @@ export type PromptAssessment = {
   };
 };
 
-const riskyPatterns: Array<[RegExp,string]> = [
-  [/\bguaranteed?\s+(?:income|profit|returns?|results?)\b/i,"Potentially misleading guarantee"],
-  [/\b(?:cure|diagnose|treat)\s+(?:cancer|diabetes|depression|disease|illness)\b/i,"Medical diagnosis or treatment claim"],
-  [/\b(?:steal|exfiltrate|credential harvest|keylogger|ransomware|malware)\b/i,"Potential cyber abuse"],
-  [/\b(?:bypass|evade)\s+(?:payment|paywall|license|authentication)\b/i,"Potential access-control circumvention"],
-  [/\b(?:impersonate|deepfake)\s+(?:a real person|someone|celebrity)\b/i,"Potential deceptive impersonation"],
+const riskyPatterns: Array<[RegExp, string]> = [
+  [/\bguaranteed?\s+(?:income|profit|returns?|results?)\b/i, "Potentially misleading guarantee"],
+  [/\b(?:cure|diagnose|treat)\s+(?:cancer|diabetes|depression|disease|illness)\b/i, "Medical diagnosis or treatment claim"],
+  [/\b(?:steal|exfiltrate|credential harvest|keylogger|ransomware|malware)\b/i, "Potential cyber abuse"],
+  [/\b(?:bypass|evade)\s+(?:payment|paywall|license|authentication)\b/i, "Potential access-control circumvention"],
+  [/\b(?:impersonate|deepfake)\s+(?:a real person|someone|celebrity)\b/i, "Potential deceptive impersonation"],
 ];
 
 export function assessPromptPackage(input: PromptAssessmentInput): PromptAssessment {
   const passed: string[] = [];
   const missing: string[] = [];
-  const required: Array<[string,string]> = [
-    ["title",input.title],
-    ["short_description",input.shortDescription],
-    ["description",input.description],
-    ["category",input.category],
-    ["prompt_content",input.promptContent],
-    ["usage_instructions",input.instructions],
+  const required: Array<[string, string]> = [
+    ["title", input.title],
+    ["short_description", input.shortDescription],
+    ["description", input.description],
+    ["category", input.category],
+    ["prompt_content", input.promptContent],
+    ["usage_instructions", input.instructions],
   ];
-  for (const [name,value] of required) {
-    if (value.trim().length>0) passed.push(name);
+  for (const [name, value] of required) {
+    if (value.trim().length > 0) passed.push(name);
     else missing.push(name);
   }
 
-  const promptLength=input.promptContent.trim().length;
-  if(promptLength<120&&!missing.includes("prompt_content"))missing.push("prompt_content_minimum_length");
-  const placeholderCount=(input.promptContent.match(/\[[^\]]{1,80}\]/g)??[]).length;
-  if(placeholderCount>0)passed.push("customizable_placeholders");
+  const promptLength = input.promptContent.trim().length;
+  if (promptLength < 120 && !missing.includes("prompt_content")) missing.push("prompt_content_minimum_length");
+  const placeholderCount = (input.promptContent.match(/\[[^\]]{1,80}\]/g) ?? []).length;
+  if (placeholderCount > 0) passed.push("customizable_placeholders");
   else missing.push("customizable_placeholders_or_explicit_fixed_input");
-  const hasUsageSteps=/(?:^|
-)\s*(?:\d+[.)]|[-*])\s+\S/m.test(input.instructions);
-  if(hasUsageSteps)passed.push("step_by_step_instructions");
+  const hasUsageSteps = /(?:^|\n)\s*(?:\d+[.)]|[-*])\s+\S/m.test(input.instructions);
+  if (hasUsageSteps) passed.push("step_by_step_instructions");
   else missing.push("step_by_step_instructions");
 
-  const rawUrls = [...new Set([input.description,input.promptContent,input.instructions].join("
-").match(/https?:\/\/[^\s<>"')\]]+/gi) ?? [])].slice(0,30);
+  const rawUrls = [...new Set(
+    [input.description, input.promptContent, input.instructions].join("\n").match(/https?:\/\/[^\s<>"')\]]+/gi) ?? [],
+  )].slice(0, 30);
   const links = rawUrls.map((raw) => {
     const candidate = raw.replace(/[.,;!?]+$/, "");
     try {
       const url = new URL(candidate);
       const host = url.hostname.toLowerCase();
-      const privateHost = host === "localhost" || host.endsWith(".local") || host === "metadata.google.internal" ||
-        /^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host) ||
-        /^169\.254\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
-        host === "0.0.0.0" || host === "::1";
-      const valid = (url.protocol === "https:" || url.protocol === "http:") && !url.username && !url.password && !privateHost;
-      return { url: candidate, valid, reason: !valid ? "Unsupported scheme, credentials or private/local host." : url.protocol === "http:" ? "Valid URL syntax; HTTPS is preferred." : "Valid HTTPS URL syntax; network reachability not checked." };
+      const privateHost =
+        host === "localhost" ||
+        host.endsWith(".local") ||
+        host === "metadata.google.internal" ||
+        /^127\./.test(host) ||
+        /^10\./.test(host) ||
+        /^192\.168\./.test(host) ||
+        /^169\.254\./.test(host) ||
+        /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+        host === "0.0.0.0" ||
+        host === "::1";
+      const valid =
+        (url.protocol === "https:" || url.protocol === "http:") &&
+        !url.username &&
+        !url.password &&
+        !privateHost;
+      return {
+        url: candidate,
+        valid,
+        reason: !valid
+          ? "Unsupported scheme, credentials or private/local host."
+          : url.protocol === "http:"
+            ? "Valid URL syntax; HTTPS is preferred."
+            : "Valid HTTPS URL syntax; network reachability not checked.",
+      };
     } catch {
       return { url: candidate, valid: false, reason: "Invalid URL syntax." };
     }
   });
   const sourceValidation = {
     links,
-    validCount: links.filter(link=>link.valid).length,
-    invalidCount: links.filter(link=>!link.valid).length,
+    validCount: links.filter((link) => link.valid).length,
+    invalidCount: links.filter((link) => !link.valid).length,
     networkReachabilityChecked: false as const,
   };
 
-  const flags=riskyPatterns.filter(([pattern])=>pattern.test(
-    [input.title,input.shortDescription,input.description,input.promptContent,input.instructions].join("
-")
-  )).map(([,label])=>label);
-  const scoreBase=Math.round((passed.length/(passed.length+missing.length||1))*100);
-  const qualityScore=Math.max(0,Math.min(100,scoreBase-flags.length*12));
+  const flags = riskyPatterns
+    .filter(([pattern]) => pattern.test([input.title, input.shortDescription, input.description, input.promptContent, input.instructions].join("\n")))
+    .map(([, label]) => label);
+  const scoreBase = Math.round((passed.length / (passed.length + missing.length || 1)) * 100);
+  const qualityScore = Math.max(0, Math.min(100, scoreBase - flags.length * 12));
 
   return {
     qualityScore,
-    completeness:{passed,missing,placeholderCount,promptLength,complete:missing.length===0},
-    originality:{
-      method:"exact-match-only",
-      exactDuplicateCheck:"not-run",
-      disclaimer:"This automated check does not establish authorship or plagiarism clearance. Human review and creator rights confirmation are still required.",
+    completeness: { passed, missing, placeholderCount, promptLength, complete: missing.length === 0 },
+    sourceValidation,
+    originality: {
+      method: "exact-match-only",
+      exactDuplicateCheck: "not-run",
+      disclaimer:
+        "This automated check does not establish authorship or plagiarism clearance. Human review and creator rights confirmation are still required.",
     },
-    compliance:{
+    compliance: {
       flags,
-      requiresHumanReview:flags.length>0,
-      disclaimer:"Keyword screening is a triage signal, not a legal or policy determination.",
+      requiresHumanReview: flags.length > 0,
+      disclaimer: "Keyword screening is a triage signal, not a legal or policy determination.",
     },
-    reproducibility:{
-      state:"documented_not_reproduced",
-      evidenceRequired:true,
-      disclaimer:"A complete written prompt is not proof that it executes successfully. Do not label it tested or reproduced without execution evidence.",
+    reproducibility: {
+      state: "documented_not_reproduced",
+      evidenceRequired: true,
+      disclaimer:
+        "A complete written prompt is not proof that it executes successfully. Do not label it tested or reproduced without execution evidence.",
     },
   };
 }
