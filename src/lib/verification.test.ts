@@ -35,7 +35,7 @@ describe("assessPromptPackage", () => {
         "3. Do not trust http://[::1]/admin.",
         "4. Do not trust http://service.internal/health.",
         "5. Do not trust https://user:password@example.org/private.",
-      ].join("\\n"),
+      ].join("\n"),
     });
     expect(result.sourceValidation.validCount).toBe(1);
     expect(result.sourceValidation.invalidCount).toBe(4);
