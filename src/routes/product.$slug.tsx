@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getProductBySlug, type ProductRow } from "@/lib/marketplace-client";
 
 export const Route = createFileRoute("/product/$slug")({
-  head: () => ({ meta: [{ title: "Product · Listingen" }] }),
+  head: ({ params }) => ({ meta: [{ title: `${params.slug.replaceAll("-", " ")} · Listingen` }, { name: "description", content: "Explore this creator-made prompt product on Listingen. Review the product details and verification status before purchase." }, { property: "og:type", content: "product" }] }),
   component: ProductPage,
 });
 
