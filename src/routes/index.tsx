@@ -13,11 +13,11 @@ import {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "PromptBase Pro Listing Generator — Guideline-Compliant Listings" },
+      { title: "Listingen — Create, Verify & Sell AI Prompts" },
       {
         name: "description",
         content:
-          "Turn a rough idea into a complete PromptBase listing: title, description, prompt template, examples, price, tags, SEO and a decline-risk checklist.",
+          "Create AI prompts, prepare marketplace products, and build a creator business with quality and verification controls.",
       },
       { property: "og:title", content: "PromptBase Pro Listing Generator" },
       {
