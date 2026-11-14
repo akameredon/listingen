@@ -138,6 +138,14 @@ Deno.serve(async (req: Request) => {
       return json({ received: true, ignored: true });
     }
 
+    const { error: auditError } = await db.from("audit_logs").insert({
+      actor_id: null, action: `paystack.${event}`,
+      entity_type: event.startsWith("transfer.") ? "payout_request" : "purchase",
+      entity_id: reference || String(data.transfer_code ?? ""),
+      metadata: { provider_event_id: providerEventId, currency: data.currency ?? null, amount: data.amount ?? null },
+    });
+    if (auditError) console.error("audit_log_write_failed", auditError.message);
+
     const { error: eventError } = await db.from("payment_events").insert({
       provider: "paystack", provider_event_id: providerEventId, event_type: event,
       payload_hash: hex(new Uint8Array(await crypto.subtle.digest("SHA-256", raw))),
