@@ -1,5 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";\nimport { streamListing } from "@/lib/listing-client";\nimport { saveListing } from "@/lib/marketplace-client";
+import { useMemo, useRef, useState } from "react";
+import { streamListing } from "@/lib/listing-client";
+import { saveListing } from "@/lib/marketplace-client";
 import { Check, Copy, Loader2, Sparkles, ArrowLeft, ArrowRight, RotateCcw } from "lucide-react";
 import {
   STEPS,
@@ -91,7 +93,9 @@ function Index() {
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [phase, setPhase] = useState<"form" | "result">("form");\n  const [saving, setSaving] = useState(false);\n  const [saved, setSaved] = useState(false);
+  const [phase, setPhase] = useState<"form" | "result">("form");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const current = STEPS[step]!;
