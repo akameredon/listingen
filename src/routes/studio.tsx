@@ -28,12 +28,41 @@ function CreatorStudio() {
   const [headline,setHeadline] = useState("");
   const [about,setAbout] = useState("");
   const [profileSaved,setProfileSaved] = useState(false);
+  const [ledger,setLedger] = useState<Array<{id:string;amount:number;currency:string;entry_type:string;created_at:string}>>([]);
+  const [payoutAccounts,setPayoutAccounts] = useState<Array<{id:string;provider:string;provider_account_ref:string|null;account_label:string|null;status:string}>>([]);
+  const [payouts,setPayouts] = useState<Array<{id:string;amount:number;currency:string;status:string;requested_at:string}>>([]);
+  const [recipientCode,setRecipientCode] = useState("");
+  const [accountLabel,setAccountLabel] = useState("");
+  const [payoutAmount,setPayoutAmount] = useState("");
+  const [payoutCurrency,setPayoutCurrency] = useState("USD");
+  const [payoutAccountId,setPayoutAccountId] = useState("");
+  const [financeBusy,setFinanceBusy] = useState(false);
 
   async function refresh() {
     setLoading(true); setError("");
     try {
-      const [drafts,items] = await Promise.all([getMyListings(),getMyProducts()]);
+      const {data:userData,error:userError}=await supabase.auth.getUser();
+      if(userError||!userData.user)throw new Error("Sign in to continue.");
+      const [drafts,items,profileResult,ledgerResult,accountResult,payoutResult] = await Promise.all([
+        getMyListings(),getMyProducts(),
+        supabase.from("creator_profiles").select("slug,headline,about").eq("user_id",userData.user.id).maybeSingle(),
+        supabase.from("ledger_entries").select("id,amount,currency,entry_type,created_at").order("created_at",{ascending:false}).limit(100),
+        supabase.from("payout_accounts").select("id,provider,provider_account_ref,account_label,status").order("created_at",{ascending:false}),
+        supabase.from("payout_requests").select("id,amount,currency,status,requested_at").order("requested_at",{ascending:false}).limit(50),
+      ]);
+      if(profileResult.error)throw profileResult.error;
+      if(ledgerResult.error)throw ledgerResult.error;
+      if(accountResult.error)throw accountResult.error;
+      if(payoutResult.error)throw payoutResult.error;
       setListings(drafts); setProducts(items);
+      setCreatorSlug(profileResult.data?.slug??`creator-${userData.user.id.slice(0,8)}`);
+      setHeadline(profileResult.data?.headline??"");
+      setAbout(profileResult.data?.about??"");
+      setProfileSaved(Boolean(profileResult.data));
+      setLedger(ledgerResult.data??[]);
+      setPayoutAccounts(accountResult.data??[]);
+      setPayouts(payoutResult.data??[]);
+      if(!payoutAccountId&&accountResult.data?.length)setPayoutAccountId(accountResult.data.find(a=>a.status==="verified")?.id??"");
     } catch (e) {
       if (e instanceof Error && e.message.includes("Sign in")) await navigate({to:"/login"});
       else setError(e instanceof Error ? e.message : "Unable to load your studio.");
@@ -47,6 +76,39 @@ function CreatorStudio() {
     });
     return () => data.subscription.unsubscribe();
   }, []);
+
+  async function addPayoutAccount(event:React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();setError("");setNotice("");
+    if(!recipientCode.trim()||!accountLabel.trim()){setError("Enter the Paystack recipient code and a label.");return;}
+    setFinanceBusy(true);
+    try{
+      const {data,error:authError}=await supabase.auth.getUser();if(authError||!data.user)throw new Error("Sign in to continue.");
+      const {error:insertError}=await supabase.from("payout_accounts").insert({
+        user_id:data.user.id,provider:"paystack",provider_account_ref:recipientCode.trim(),account_label:accountLabel.trim(),status:"pending",metadata:{}
+      });
+      if(insertError)throw insertError;
+      setRecipientCode("");setAccountLabel("");setNotice("Payout account submitted. It must be verified by an administrator before use.");
+      await refresh();
+    }catch(e){setError(e instanceof Error?e.message:"Could not add payout account.");}
+    finally{setFinanceBusy(false);}
+  }
+
+  async function requestCreatorPayout(event:React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();setError("");setNotice("");
+    const amount=Number(payoutAmount);
+    if(!Number.isFinite(amount)||amount<=0||!payoutAccountId){setError("Enter a valid payout amount and choose a verified account.");return;}
+    setFinanceBusy(true);
+    try{
+      const {data,error:invokeError}=await supabase.functions.invoke("marketplace-finance",{body:{
+        action:"request_payout",amount:Math.round(amount*100),currency:payoutCurrency,payoutAccountId
+      }});
+      if(invokeError)throw new Error(invokeError.message);
+      if(data?.error)throw new Error(data.error);
+      setPayoutAmount("");setNotice("Payout request submitted and reserved against your available balance.");
+      await refresh();
+    }catch(e){setError(e instanceof Error?e.message:"Could not request payout.");}
+    finally{setFinanceBusy(false);}
+  }
 
   async function saveCreatorProfile(event:React.FormEvent<HTMLFormElement>) {
     event.preventDefault();setError("");setNotice("");
@@ -115,6 +177,28 @@ function CreatorStudio() {
             <label className="block text-sm font-medium md:col-span-2">About your work<textarea value={about} onChange={e=>setAbout(e.target.value)} className="mt-1 min-h-20 w-full rounded-lg border border-input bg-background px-3 py-2" placeholder="Explain what you create and who your products help." /></label>
             <button className="w-fit rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground">Save storefront profile</button>
           </form>
+        </section>
+
+        <section className="mt-6 rounded-xl border border-border bg-card p-5">
+          <h2 className="text-lg font-bold">Earnings & payouts</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Earnings are credited only after a verified payment webhook. Requested payouts reserve your available balance.</p>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <form onSubmit={addPayoutAccount} className="space-y-3 rounded-lg border border-border p-4">
+              <h3 className="font-semibold">Add Paystack recipient</h3>
+              <label className="block text-sm font-medium">Account label<input value={accountLabel} onChange={e=>setAccountLabel(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" placeholder="My primary bank account" /></label>
+              <label className="block text-sm font-medium">Paystack recipient code<input value={recipientCode} onChange={e=>setRecipientCode(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" placeholder="RCP_…" /></label>
+              <button disabled={financeBusy} className="rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary disabled:opacity-50">Submit recipient for verification</button>
+              <div className="space-y-1">{payoutAccounts.map(a=><p key={a.id} className="text-xs text-muted-foreground">{a.account_label||a.provider_account_ref} · {a.status}</p>)}</div>
+            </form>
+            <form onSubmit={requestCreatorPayout} className="space-y-3 rounded-lg border border-border p-4">
+              <h3 className="font-semibold">Request a payout</h3>
+              <label className="block text-sm font-medium">Verified payout account<select value={payoutAccountId} onChange={e=>setPayoutAccountId(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2"><option value="">Select account</option>{payoutAccounts.filter(a=>a.status==="verified").map(a=><option key={a.id} value={a.id}>{a.account_label||a.provider_account_ref}</option>)}</select></label>
+              <div className="grid grid-cols-[1fr_100px] gap-2"><label className="block text-sm font-medium">Amount<input value={payoutAmount} onChange={e=>setPayoutAmount(e.target.value)} inputMode="decimal" className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" placeholder="25.00" /></label><label className="block text-sm font-medium">Currency<select value={payoutCurrency} onChange={e=>setPayoutCurrency(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2"><option>USD</option><option>NGN</option><option>GBP</option><option>EUR</option></select></label></div>
+              <button disabled={financeBusy||!payoutAccounts.some(a=>a.status==="verified")} className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground disabled:opacity-50">Request payout</button>
+              <div className="space-y-1">{payouts.slice(0,5).map(p=><p key={p.id} className="text-xs text-muted-foreground">{(p.amount/100).toFixed(2)} {p.currency} · {p.status}</p>)}</div>
+            </form>
+          </div>
+          <div className="mt-4 rounded-lg bg-muted p-4"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ledger balance</p><div className="mt-2 flex flex-wrap gap-4">{["USD","NGN","GBP","EUR"].map(currency=>{const total=ledger.filter(x=>x.currency===currency).reduce((sum,x)=>sum+x.amount,0);const reserved=payouts.filter(x=>x.currency===currency&&["requested","approved","processing"].includes(x.status)).reduce((sum,x)=>sum+x.amount,0);return <p key={currency} className="text-sm"><strong>{(total-reserved)/100}</strong> {currency}</p>;})}</div></div>
         </section>
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-bold">Your prompt library</h2><Link to="/" className="rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground">Create a prompt</Link></div>
