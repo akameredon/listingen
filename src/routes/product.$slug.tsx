@@ -50,7 +50,12 @@ function ProductPage() {
         return;
       }
       const action=product.price_amount===0?"claim_free":"initialize_checkout";
-      const {data,error:invokeError}=await supabase.functions.invoke("marketplace-finance",{body:{action,productId:product.id}});
+      const params=new URLSearchParams(window.location.search);
+      const {data,error:invokeError}=await supabase.functions.invoke("marketplace-finance",{body:{
+        action,productId:product.id,referralCode:params.get("ref"),
+        utmSource:params.get("utm_source"),utmMedium:params.get("utm_medium"),
+        utmCampaign:params.get("utm_campaign"),landingPath:window.location.pathname
+      }});
       if(invokeError)throw new Error(invokeError.message);
       if(data?.error)throw new Error(data.error);
       if(data?.authorization_url){window.location.assign(data.authorization_url);return;}
