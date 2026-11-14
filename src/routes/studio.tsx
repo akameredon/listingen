@@ -57,6 +57,9 @@ function CreatorStudio() {
   const [productCategory,setProductCategory] = useState(categories[0]!);
   const [productCurrency,setProductCurrency] = useState("USD");
   const [productTags,setProductTags] = useState("");
+  const [compareAtPrice,setCompareAtPrice] = useState("");
+  const [discountStartsAt,setDiscountStartsAt] = useState("");
+  const [discountEndsAt,setDiscountEndsAt] = useState("");
 
   async function refresh() {
     setLoading(true); setError("");
@@ -214,6 +217,9 @@ function CreatorStudio() {
     setEditingProductId(product.id);setProductTitle(product.title);setProductSummary(product.short_description);
     setProductDescription(product.description);setProductPrice((product.price_amount/100).toFixed(2));
     setProductCategory(product.category);setProductCurrency(product.currency);setProductTags(product.tags.join(", "));
+    setCompareAtPrice(product.compare_at_price_amount==null?"":(product.compare_at_price_amount/100).toFixed(2));
+    setDiscountStartsAt(product.discount_starts_at?new Date(product.discount_starts_at).toISOString().slice(0,16):"");
+    setDiscountEndsAt(product.discount_ends_at?new Date(product.discount_ends_at).toISOString().slice(0,16):"");
   }
 
   async function saveProductDetails(product:ProductRow){
@@ -221,7 +227,10 @@ function CreatorStudio() {
     const amount=Number(productPrice);
     if(!Number.isFinite(amount)||amount<0){setError("Enter a valid product price.");return;}
     try{
-      await updateProductDetails({productId:product.id,title:productTitle,shortDescription:productSummary,description:productDescription,category:productCategory,priceAmount:Math.round(amount*100),currency:productCurrency,tags:productTags.split(",").map(t=>t.trim()).filter(Boolean)});
+      const compare=compareAtPrice.trim()===""?null:Number(compareAtPrice);
+      if(compare!==null&&(!Number.isFinite(compare)||compare*100<=amount*100)){throw new Error("Compare-at price must be greater than the current price.");}
+      if(discountStartsAt&&discountEndsAt&&new Date(discountEndsAt)<=new Date(discountStartsAt)){throw new Error("Discount end must be later than discount start.");}
+      await updateProductDetails({productId:product.id,title:productTitle,shortDescription:productSummary,description:productDescription,category:productCategory,priceAmount:Math.round(amount*100),currency:productCurrency,tags:productTags.split(",").map(t=>t.trim()).filter(Boolean),compareAtPriceAmount:compare===null?null:Math.round(compare*100),discountStartsAt:discountStartsAt?new Date(discountStartsAt).toISOString():null,discountEndsAt:discountEndsAt?new Date(discountEndsAt).toISOString():null});
       setEditingProductId(null);setNotice("Product details saved as a draft. Submit it for review before republishing.");await refresh();
     }catch(e){setError(e instanceof Error?e.message:"Could not update product details.");}
   }
@@ -347,6 +356,7 @@ function CreatorStudio() {
                 <label className="block text-sm font-medium">Product description<textarea value={productDescription} onChange={e=>setProductDescription(e.target.value)} className="mt-1 min-h-36 w-full rounded-lg border border-input bg-background px-3 py-2" /></label>
                 <div className="grid gap-3 sm:grid-cols-3"><label className="block text-sm font-medium">Category<select value={productCategory} onChange={e=>setProductCategory(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2">{categories.map(x=><option key={x}>{x}</option>)}</select></label><label className="block text-sm font-medium">Price<input value={productPrice} onChange={e=>setProductPrice(e.target.value)} inputMode="decimal" className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" /></label><label className="block text-sm font-medium">Currency<select value={productCurrency} onChange={e=>setProductCurrency(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2"><option>USD</option><option>NGN</option><option>GBP</option><option>EUR</option></select></label></div>
                 <label className="block text-sm font-medium">Tags (comma separated)<input value={productTags} onChange={e=>setProductTags(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" /></label>
+                <div className="grid gap-3 sm:grid-cols-3"><label className="block text-sm font-medium">Compare-at price (optional)<input value={compareAtPrice} onChange={e=>setCompareAtPrice(e.target.value)} inputMode="decimal" className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" placeholder="Regular price" /></label><label className="block text-sm font-medium">Discount starts<input type="datetime-local" value={discountStartsAt} onChange={e=>setDiscountStartsAt(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" /></label><label className="block text-sm font-medium">Discount ends<input type="datetime-local" value={discountEndsAt} onChange={e=>setDiscountEndsAt(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" /></label></div>
                 <div className="flex gap-2"><button onClick={()=>void saveProductDetails(product)} className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground">Save product draft</button><button onClick={()=>setEditingProductId(null)} className="rounded-lg border border-border px-3 py-2 text-sm">Cancel</button></div>
               </div>:null}
               <div className="mt-3 flex flex-wrap gap-2">{(versionHistory[product.id]??[]).map(v=><span key={v.id} className="rounded bg-muted px-2 py-1 text-[11px]">v{v.version_number} · {v.verification_state}</span>)}</div>
