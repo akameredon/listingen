@@ -32,7 +32,8 @@ The existing prompt and image generators call the Gemini API from server routes.
 
 Set these secrets in Supabase Edge Function secrets before enabling real-money checkout or transfers:
 
-- `PAYSTACK_SECRET_KEY`: the platform Paystack secret key for checkout, refunds and transfers.\n- `PAYSTACK_WEBHOOK_SECRET`: the webhook signing secret (`whsec_`) for timestamped `Paystack-Signature` verification. The handler also supports the legacy `x-paystack-signature` while the API secret remains active.
+- `PAYSTACK_SECRET_KEY`: the platform Paystack secret key for checkout, refunds and transfers.
+- `PAYSTACK_WEBHOOK_SECRET`: the webhook signing secret (`whsec_`) for timestamped `Paystack-Signature` verification. The handler also supports the legacy `x-paystack-signature` while the API secret remains active.
 - `LISTINGEN_SITE_URL`: the canonical public application origin, e.g. the final production domain.
 
 Configure the Paystack webhook URL as:
