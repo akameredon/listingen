@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { extractMeta } from "@/lib/listing-client";
-import type { ListingInput } from "@/lib/listing";
+import type { ListingInput } from "@/lib/listing";\nimport { assessPromptPackage } from "@/lib/verification";
 
 export type ListingRow = {
   id: string;
@@ -144,6 +144,37 @@ export async function createProductFromListing(args: {
 
 export async function submitProductForReview(productId: string, versionId: string) {
   const user = await requireUser();
+  const [productResult, versionResult] = await Promise.all([
+    supabase.from("marketplace_products").select("title,short_description,description,category").eq("id", productId).single(),
+    supabase.from("product_versions").select("prompt_content,instructions").eq("id", versionId).single(),
+  ]);
+  if (productResult.error) throw productResult.error;
+  if (versionResult.error) throw versionResult.error;
+
+  const assessment = assessPromptPackage({
+    title: productResult.data.title,
+    shortDescription: productResult.data.short_description,
+    description: productResult.data.description,
+    category: productResult.data.category,
+    promptContent: versionResult.data.prompt_content,
+    instructions: versionResult.data.instructions,
+  });
+
+  const { data: exactMatches, error: duplicateError } = await supabase
+    .from("product_versions")
+    .select("id,product_id")
+    .eq("prompt_content", versionResult.data.prompt_content)
+    .neq("id", versionId)
+    .limit(1);
+  if (duplicateError) throw duplicateError;
+
+  const originalityReport = {
+    ...assessment.originality,
+    exactDuplicateCheck: exactMatches?.length ? "match_found_in_visible_catalog" : "no_exact_match_in_visible_catalog",
+    matchingVersionId: exactMatches?.[0]?.id ?? null,
+    disclaimer: "This checks exact text matches only within records visible to the submitting user and public catalog. It does not establish authorship or plagiarism clearance.",
+  };
+
   const { data: submission, error } = await supabase
     .from("review_submissions")
     .insert({
@@ -151,10 +182,11 @@ export async function submitProductForReview(productId: string, versionId: strin
       version_id: versionId,
       submitted_by: user.id,
       status: "pending",
-      completeness_report: { state: "pending" },
-      originality_report: { state: "pending" },
-      compliance_report: { state: "pending" },
-      reproducibility_report: { state: "documented_not_reproduced" },
+      quality_score: assessment.qualityScore,
+      completeness_report: assessment.completeness,
+      originality_report: originalityReport,
+      compliance_report: assessment.compliance,
+      reproducibility_report: assessment.reproducibility,
     })
     .select("*")
     .single();
