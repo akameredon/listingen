@@ -57,6 +57,12 @@ function AdminPage() {
       const currentRole=String(data.user.app_metadata?.role??"");
       setRole(currentRole);
       if(!["admin","reviewer"].includes(currentRole)){setLoading(false);return;}
+      if(currentRole==="reviewer"){
+        const {data:q,error:qError}=await supabase.from("review_submissions").select("id,product_id,version_id,submitted_by,status,submitted_at,quality_score,completeness_report,originality_report,compliance_report,reproducibility_report,marketplace_products(title,slug),product_versions(prompt_content,verification_state,verification_evidence)").in("status",["pending","in_progress"]).order("submitted_at",{ascending:true});
+        if(qError)throw qError;
+        setQueue((q??[]) as unknown as QueueItem[]);
+        setLoading(false);return;
+      }
       const [q,r,p,accounts,tickets,reviews,orders,revenue,campaigns,config]=await Promise.all([
         supabase.from("review_submissions").select("id,product_id,version_id,submitted_by,status,submitted_at,quality_score,completeness_report,originality_report,compliance_report,reproducibility_report,marketplace_products(title,slug),product_versions(prompt_content,verification_state,verification_evidence)").in("status",["pending","in_progress"]).order("submitted_at",{ascending:true}),
         supabase.from("commission_rules").select("id,name,currency,platform_fee_bps,creator_share_bps,is_active").order("created_at",{ascending:false}),
