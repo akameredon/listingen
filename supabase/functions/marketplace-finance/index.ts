@@ -96,6 +96,22 @@ async function initializeCheckout(req: Request, body: Record<string, unknown>, u
   return reply(req, { authorization_url: result.data.authorization_url, reference, purchase_id: purchase.id });
 }
 
+async function claimFree(req: Request, body: Record<string, unknown>, user: { id: string }) {
+  const productId = typeof body.productId === "string" ? body.productId : "";
+  if (!productId) return reply(req, { error: "A product is required." }, 400);
+  const db = serviceClient();
+  const { data: product, error } = await db.from("marketplace_products").select("id,creator_id,title,price_amount,currency,current_version_id,status").eq("id", productId).eq("status", "published").single();
+  if (error || !product) return reply(req, { error: "This product is not available." }, 404);
+  if (product.creator_id === user.id) return reply(req, { error: "You cannot claim your own product." }, 400);
+  if (product.price_amount !== 0 || !product.current_version_id) return reply(req, { error: "This product is not a free product." }, 409);
+  const reference = `LISTINGEN_FREE_${crypto.randomUUID().replaceAll("-", "")}`;
+  const { data: purchase, error: purchaseError } = await db.from("purchases").insert({buyer_id:user.id,provider:"free",provider_checkout_id:reference,status:"paid",currency:product.currency,subtotal_amount:0,platform_fee_amount:0,total_amount:0,paid_at:new Date().toISOString()}).select("id").single();
+  if (purchaseError || !purchase) return reply(req, { error: "Could not record free product claim." }, 500);
+  const { error: itemError } = await db.from("purchase_items").insert({purchase_id:purchase.id,product_id:product.id,version_id:product.current_version_id,creator_id:product.creator_id,product_title_snapshot:product.title,unit_amount:0,creator_amount:0,platform_amount:0,currency:product.currency});
+  if (itemError) { await db.from("purchases").update({status:"failed"}).eq("id",purchase.id); return reply(req,{error:"Could not deliver free product."},500); }
+  return reply(req,{purchase_id:purchase.id,reference,status:"paid"});
+}
+
 async function requestPayout(req: Request, body: Record<string, unknown>, user: { id: string }) {
   const amount = Number(body.amount);
   const payoutAccountId = typeof body.payoutAccountId === "string" ? body.payoutAccountId : "";
@@ -162,6 +178,7 @@ Deno.serve(async (req: Request) => {
     if (!user) return reply(req, { error: "Sign in to continue." }, 401);
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
     if (body.action === "initialize_checkout") return await initializeCheckout(req, body, user);
+    if (body.action === "claim_free") return await claimFree(req, body, user);
     if (body.action === "request_payout") return await requestPayout(req, body, user);
     if (body.action === "execute_payout") return await executePayout(req, body, user);
     return reply(req, { error: "Unknown finance action." }, 400);
