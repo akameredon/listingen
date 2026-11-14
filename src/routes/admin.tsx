@@ -75,7 +75,7 @@ function AdminPage() {
       setSupportTickets(tickets.data??[]);setBuyerReviews(reviews.data??[]);
       setPaidOrders(orders.data??[]);setPlatformRevenue(revenue.data??[]);setAttributions(campaigns.data??[]);
       setAppConfig(config.data??[]);setConfigDrafts(Object.fromEntries((config.data??[]).map(row=>[row.key,JSON.stringify(row.value,null,2)])));
-      if(role==="admin"){
+      if(currentRole==="admin"){
         const {data:userData,error:userError}=await supabase.functions.invoke("marketplace-finance",{body:{action:"list_users"}});
         if(userError)throw userError;if(userData?.error)throw new Error(userData.error);
         setUserDirectory(userData.users??[]);
