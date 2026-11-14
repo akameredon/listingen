@@ -20,6 +20,9 @@ function AdminPage() {
   const [role,setRole]=useState("");
   const [queue,setQueue]=useState<QueueItem[]>([]);
   const [rules,setRules]=useState<Array<{id:string;name:string;currency:string;platform_fee_bps:number|null;creator_share_bps:number|null;is_active:boolean}>>([]);
+  const [payoutQueue,setPayoutQueue]=useState<Array<{id:string;user_id:string;amount:number;currency:string;status:string;requested_at:string;provider_transfer_ref:string|null;payout_accounts:{id:string;account_label:string|null;provider_account_ref:string|null;status:string}|null}>>([]);
+  const [pendingAccounts,setPendingAccounts]=useState<Array<{id:string;user_id:string;account_label:string|null;provider_account_ref:string|null;status:string}>>([]);
+  const [financeBusy,setFinanceBusy]=useState(false);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
@@ -39,12 +42,15 @@ function AdminPage() {
       const currentRole=String(data.user.app_metadata?.role??"");
       setRole(currentRole);
       if(!["admin","reviewer"].includes(currentRole)){setLoading(false);return;}
-      const [q,r]=await Promise.all([
+      const [q,r,p,accounts]=await Promise.all([
         supabase.from("review_submissions").select("id,product_id,version_id,submitted_by,status,submitted_at,quality_score,completeness_report,originality_report,compliance_report,reproducibility_report,marketplace_products(title,slug),product_versions(prompt_content,verification_state,verification_evidence)").in("status",["pending","in_progress"]).order("submitted_at",{ascending:true}),
-        supabase.from("commission_rules").select("id,name,currency,platform_fee_bps,creator_share_bps,is_active").order("created_at",{ascending:false})
+        supabase.from("commission_rules").select("id,name,currency,platform_fee_bps,creator_share_bps,is_active").order("created_at",{ascending:false}),
+        supabase.from("payout_requests").select("id,user_id,amount,currency,status,requested_at,provider_transfer_ref,payout_accounts(id,account_label,provider_account_ref,status)").in("status",["requested","processing","failed"]).order("requested_at",{ascending:true}),
+        supabase.from("payout_accounts").select("id,user_id,account_label,provider_account_ref,status").eq("status","pending").order("created_at",{ascending:true})
       ]);
-      if(q.error)throw q.error;if(r.error)throw r.error;
+      if(q.error)throw q.error;if(r.error)throw r.error;if(p.error)throw p.error;if(accounts.error)throw accounts.error;
       setQueue((q.data??[]) as unknown as QueueItem[]);setRules(r.data??[]);
+      setPayoutQueue((p.data??[]) as unknown as typeof payoutQueue);setPendingAccounts(accounts.data??[]);
     }catch(e){setError(e instanceof Error?e.message:"Unable to load admin workspace.");}
     finally{setLoading(false);}
   }
@@ -85,6 +91,30 @@ function AdminPage() {
       setNotice(role==="admin"&&decision==="approved"?"Product approved and published.":"Review decision saved. An administrator must complete publication if required.");
       await load();
     }catch(e){setError(e instanceof Error?e.message:"Could not save review decision.");}
+  }
+
+  async function verifyAccount(accountId:string){
+    setFinanceBusy(true);setError("");setNotice("");
+    try{
+      const {data,error:invokeError}=await supabase.functions.invoke("marketplace-finance",{body:{action:"verify_payout_account",accountId}});
+      if(invokeError)throw new Error(invokeError.message);
+      if(data?.error)throw new Error(data.error);
+      setNotice(`Payout recipient verified. Bank: ${data.bank_name??"confirmed"} · ending ${data.account_last4??"—"}.`);
+      await load();
+    }catch(e){setError(e instanceof Error?e.message:"Could not verify payout recipient.");}
+    finally{setFinanceBusy(false);}
+  }
+
+  async function processPayout(payoutId:string){
+    setFinanceBusy(true);setError("");setNotice("");
+    try{
+      const {data,error:invokeError}=await supabase.functions.invoke("marketplace-finance",{body:{action:"execute_payout",payoutId}});
+      if(invokeError)throw new Error(invokeError.message);
+      if(data?.error)throw new Error(data.error);
+      setNotice("Payout transfer submitted to Paystack. Final settlement will be recorded from its signed webhook.");
+      await load();
+    }catch(e){setError(e instanceof Error?e.message:"Could not process payout.");}
+    finally{setFinanceBusy(false);}
   }
 
   async function saveCommission(event:React.FormEvent<HTMLFormElement>){
@@ -131,6 +161,12 @@ function AdminPage() {
               <div className="mt-4 flex flex-wrap gap-2"><button onClick={()=>void review(item,"approved")} className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground">Approve{role==="admin"?" & publish":""}</button><button onClick={()=>void review(item,"changes_requested")} className="rounded-lg border border-border px-3 py-2 text-sm">Request changes</button><button onClick={()=>void review(item,"rejected")} className="rounded-lg border border-destructive/50 px-3 py-2 text-sm text-destructive">Reject</button></div>
             </article>)}</div>}
           </section>
+          {role==="admin"&&<section className="mt-10"><h2 className="text-xl font-bold">Payout operations</h2><p className="mt-1 text-sm text-muted-foreground">Verify recipient references before processing creator payouts. Transfers are initiated only by an administrator and marked paid only after Paystack's signed webhook.</p>
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div className="rounded-xl border border-border bg-card p-5"><h3 className="font-bold">Pending payout accounts</h3>{pendingAccounts.length===0?<p className="mt-3 text-sm text-muted-foreground">No recipient accounts await verification.</p>:<div className="mt-3 space-y-3">{pendingAccounts.map(account=><div key={account.id} className="rounded-lg border border-border p-3"><p className="font-semibold">{account.account_label||"Paystack recipient"}</p><p className="mt-1 break-all text-xs text-muted-foreground">{account.provider_account_ref}</p><button disabled={financeBusy} onClick={()=>void verifyAccount(account.id)} className="mt-3 rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary disabled:opacity-50">Verify with Paystack</button></div>)}</div>}</div>
+              <div className="rounded-xl border border-border bg-card p-5"><h3 className="font-bold">Payout requests</h3>{payoutQueue.length===0?<p className="mt-3 text-sm text-muted-foreground">No payout requests await processing.</p>:<div className="mt-3 space-y-3">{payoutQueue.map(payout=><div key={payout.id} className="rounded-lg border border-border p-3"><div className="flex items-center justify-between gap-2"><strong>{(payout.amount/100).toFixed(2)} {payout.currency}</strong><span className="rounded-full bg-muted px-2 py-1 text-xs">{payout.status}</span></div><p className="mt-1 text-xs text-muted-foreground">{payout.payout_accounts?.account_label||payout.payout_accounts?.provider_account_ref||"No recipient"} · {new Date(payout.requested_at).toLocaleString()}</p>{payout.status==="requested"&&<button disabled={financeBusy} onClick={()=>void processPayout(payout.id)} className="mt-3 rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground disabled:opacity-50">Approve & send payout</button>}</div>)}</div>}</div>
+            </div>
+          </section>}
           {role==="admin"&&<section className="mt-10"><h2 className="text-xl font-bold">Commission configuration</h2><p className="mt-1 text-sm text-muted-foreground">No revenue split is assumed. Configure the platform fee and creator share per currency. Each sale will preserve its own commission snapshot.</p>
             <form onSubmit={saveCommission} className="mt-4 grid gap-3 rounded-xl border border-border bg-card p-5 md:grid-cols-4">
               <label className="block text-sm font-medium md:col-span-2">Rule name<input value={ruleName} onChange={e=>setRuleName(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" placeholder="Standard marketplace split" /></label>
