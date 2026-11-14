@@ -23,7 +23,7 @@ function AppsGamesPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
-  const set = (key: keyof AppsGamesInput, value: string) => setV((old) => ({ ...old, [key]: value }));
+  const set = <K extends keyof AppsGamesInput>(key: K, value: AppsGamesInput[K]) => setV((old) => ({ ...old, [key]: value }));
 
   async function generate() {
     setLoading(true); setError(""); setOutput("");
@@ -73,7 +73,7 @@ function AppsGamesPage() {
         <section className="mt-5 rounded-xl border border-border bg-card p-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-semibold">Coding agent
-              <select className={`${inputClass} mt-2`} value={v.coding_agent} onChange={(e) => set("coding_agent", e.target.value)}>{agents.map((agent) => <option key={agent}>{agent}</option>)}</select>
+              <select className={`${inputClass} mt-2`} value={v.coding_agent} onChange={(e) => set("coding_agent", e.target.value as AppsGamesInput["coding_agent"])}>{agents.map((agent) => <option key={agent}>{agent}</option>)}</select>
             </label>
             <label className="text-sm font-semibold">Project name (optional)
               <input className={`${inputClass} mt-2`} value={v.project_name} onChange={(e) => set("project_name", e.target.value)} placeholder="e.g. PocketPitch" />
@@ -117,7 +117,7 @@ function AppsGamesPage() {
               <select className={`${inputClass} mt-2`} value={v.price_target} onChange={(e) => set("price_target", e.target.value)}>{["Free", "$2.99", "$3.99", "$4.99", "$5.99", "$6.99", "$7.99", "$8.99", "$9.99", "$10.99", "$14.99", "$19.99"].map((p) => <option key={p}>{p}</option>)}</select>
             </label>
             <label className="text-sm font-semibold">Build time
-              <select className={`${inputClass} mt-2`} value={v.build_time} onChange={(e) => set("build_time", e.target.value)}>{["Under 15 minutes", "15 minutes to 1 hour", "1 to 3 hours", "Over 3 hours", "Not yet tested"].map((t) => <option key={t}>{t}</option>)}</select>
+              <select className={`${inputClass} mt-2`} value={v.build_time} onChange={(e) => set("build_time", e.target.value as AppsGamesInput["build_time"])}>{["Under 15 minutes", "15 minutes to 1 hour", "1 to 3 hours", "Over 3 hours", "Not yet tested"].map((t) => <option key={t}>{t}</option>)}</select>
             </label>
           </div>
           <button disabled={!valid || loading} onClick={generate} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 font-bold text-primary-foreground disabled:opacity-40">
