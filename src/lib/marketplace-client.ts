@@ -144,6 +144,40 @@ export async function createProductFromListing(args: {
   return { ...product, current_version_id: version.id } as ProductRow;
 }
 
+export async function createProductVersion(args: {
+  productId: string;
+  promptContent: string;
+  instructions: string;
+  changelog: string;
+}) {
+  const user = await requireUser();
+  if (args.promptContent.trim().length < 40) throw new Error("The prompt version needs at least 40 characters.");
+  const { data: previous, error: historyError } = await supabase
+    .from("product_versions").select("version_number").eq("product_id", args.productId)
+    .order("version_number", { ascending: false }).limit(1);
+  if (historyError) throw historyError;
+  const nextVersion = (previous?.[0]?.version_number ?? 0) + 1;
+  const { data: version, error: versionError } = await supabase
+    .from("product_versions").insert({
+      product_id: args.productId,
+      version_number: nextVersion,
+      prompt_content: args.promptContent,
+      instructions: args.instructions,
+      changelog: args.changelog,
+      verification_state: "documented",
+      verification_evidence: { state: "documented", note: "New creator-authored version; execution has not been independently reproduced." },
+      created_by: user.id,
+    }).select("id,version_number,verification_state,created_at").single();
+  if (versionError) throw versionError;
+  const { error: productError } = await supabase.from("marketplace_products").update({
+    current_version_id: version.id,
+    status: "draft",
+    published_at: null,
+  }).eq("id", args.productId);
+  if (productError) throw productError;
+  return version;
+}
+
 export async function submitProductForReview(productId: string, versionId: string) {
   const user = await requireUser();
   const [productResult, versionResult] = await Promise.all([
