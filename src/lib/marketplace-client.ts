@@ -294,7 +294,7 @@ export async function submitProductForReview(productId: string, versionId: strin
       submitted_by: user.id,
       status: "pending",
       quality_score: assessment.qualityScore,
-      completeness_report: assessment.completeness,
+      completeness_report: { ...assessment.completeness, sourceValidation: assessment.sourceValidation },
       originality_report: originalityReport,
       compliance_report: assessment.compliance,
       reproducibility_report: assessment.reproducibility,
