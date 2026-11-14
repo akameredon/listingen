@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { extractMeta } from "@/lib/listing-client";
 import type { ListingInput } from "@/lib/listing";
 import { assessPromptPackage } from "@/lib/verification";
+import { findDuplicate } from "@/lib/listing-client";
 
 export type ListingRow = {
   id: string;
@@ -161,19 +162,28 @@ export async function submitProductForReview(productId: string, versionId: strin
     instructions: versionResult.data.instructions,
   });
 
-  const { data: exactMatches, error: duplicateError } = await supabase
+  const { data: visibleVersions, error: duplicateError } = await supabase
     .from("product_versions")
-    .select("id,product_id")
-    .eq("prompt_content", versionResult.data.prompt_content)
+    .select("id,product_id,prompt_content,marketplace_products(title)")
     .neq("id", versionId)
-    .limit(1);
+    .limit(100);
   if (duplicateError) throw duplicateError;
+  const duplicate = findDuplicate(
+    versionResult.data.prompt_content,
+    (visibleVersions ?? []).map((version) => ({
+      id: version.id,
+      title: (version.marketplace_products as { title?: string } | null)?.title ?? "Untitled product",
+      template: version.prompt_content,
+    })),
+    versionId,
+  );
+  const exactMatch = (visibleVersions ?? []).find((version) => version.prompt_content === versionResult.data.prompt_content);
 
   const originalityReport = {
     ...assessment.originality,
-    exactDuplicateCheck: exactMatches?.length ? "match_found_in_visible_catalog" : "no_exact_match_in_visible_catalog",
-    matchingVersionId: exactMatches?.[0]?.id ?? null,
-    disclaimer: "This checks exact text matches only within records visible to the submitting user and public catalog. It does not establish authorship or plagiarism clearance.",
+    exactDuplicateCheck: exactMatch ? "match_found_in_visible_catalog" : "no_exact_match_in_visible_catalog",
+    similarityCheck: duplicate ? { matched: true, versionId: duplicate.id, title: duplicate.title, similarity: Number(duplicate.sim.toFixed(3)) } : { matched: false },
+    disclaimer: "Similarity screening compares up to 100 records visible to the submitting user and public catalog. It is a triage signal only and does not establish authorship or plagiarism clearance.",
   };
 
   const { data: submission, error } = await supabase
