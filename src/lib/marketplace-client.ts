@@ -304,7 +304,7 @@ export async function submitProductForReview(productId: string, versionId: strin
 
 export async function getPublishedProducts(search = "", category = "All") {
   let query = supabase.from("marketplace_products")
-    .select("id,creator_id,slug,title,short_description,description,category,tags,preview_content,price_amount,currency,status,current_version_id,created_at,updated_at")
+    .select("id,creator_id,slug,title,short_description,description,category,tags,preview_content,price_amount,compare_at_price_amount,discount_starts_at,discount_ends_at,currency,status,current_version_id,created_at,updated_at")
     .eq("status", "published")
     .order("published_at", { ascending: false })
     .limit(60);
