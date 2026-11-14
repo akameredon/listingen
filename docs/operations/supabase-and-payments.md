@@ -43,6 +43,15 @@ The webhook validates the signature, verifies amount and currency against the pe
 
 Partial refunds are not automated in this release; full refunds are reversed through the signed webhook. Reconcile partial refunds manually until a dedicated allocation workflow is implemented.
 
+## Backup and recovery
+
+A weekly GitHub Actions workflow now creates a PostgreSQL custom-format dump, verifies the archive, encrypts it with AES-256, and stores only the encrypted artifact for 30 days. It also supports manual dispatch. Configure these GitHub Actions repository secrets before the first run:
+
+- `SUPABASE_DB_URL`: direct database connection string for the Listingen project.
+- `BACKUP_ENCRYPTION_KEY`: a strong, independently stored passphrase. Do not commit it or put it in workflow logs.
+
+Restore only into a separately verified target project after review. Decrypt with GPG and restore with `pg_restore --no-owner --no-privileges`. This is a backup workflow, not point-in-time recovery; retain the encryption passphrase separately or the artifacts cannot be restored.
+
 ## Administrator provisioning
 
 Administrative privileges are read from Supabase Auth `app_metadata.role`, never from editable `user_metadata` or a public profile field.
