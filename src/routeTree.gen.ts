@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as FactoryRouteImport } from './routes/factory'
 import { Route as ApiListingRouteImport } from './routes/api/listing'
+import { Route as AppsGamesRouteImport } from './routes/apps-games'
+import { Route as ApiAppsGamesRouteImport } from './routes/api/apps-games'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,11 +30,23 @@ const ApiListingRoute = ApiListingRouteImport.update({
   path: '/api/listing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppsGamesRoute = AppsGamesRouteImport.update({
+  id: '/apps-games',
+  path: '/apps-games',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAppsGamesRoute = ApiAppsGamesRouteImport.update({
+  id: '/api/apps-games',
+  path: '/api/apps-games',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/factory': typeof FactoryRoute
   '/api/listing': typeof ApiListingRoute
+  '/apps-games': typeof AppsGamesRoute
+  '/api/apps-games': typeof ApiAppsGamesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -47,16 +61,18 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/factory' | '/api/listing'
+  fullPaths: '/' | '/factory' | '/api/listing' | '/apps-games' | '/api/apps-games'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/factory' | '/api/listing'
-  id: '__root__' | '/' | '/factory' | '/api/listing'
+  to: '/' | '/factory' | '/api/listing' | '/apps-games' | '/api/apps-games'
+  id: '__root__' | '/' | '/factory' | '/api/listing' | '/apps-games' | '/api/apps-games'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   FactoryRoute: typeof FactoryRoute
   ApiListingRoute: typeof ApiListingRoute
+  AppsGamesRoute: typeof AppsGamesRoute
+  ApiAppsGamesRoute: typeof ApiAppsGamesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +98,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiListingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/apps-games': {
+      id: '/apps-games'
+      path: '/apps-games'
+      fullPath: '/apps-games'
+      preLoaderRoute: typeof AppsGamesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/apps-games': {
+      id: '/api/apps-games'
+      path: '/api/apps-games'
+      fullPath: '/api/apps-games'
+      preLoaderRoute: typeof ApiAppsGamesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +119,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   FactoryRoute: FactoryRoute,
   ApiListingRoute: ApiListingRoute,
+  AppsGamesRoute: AppsGamesRoute,
+  ApiAppsGamesRoute: ApiAppsGamesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
