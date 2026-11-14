@@ -25,7 +25,7 @@ function AdminPage() {
   const [supportTickets,setSupportTickets]=useState<Array<{id:string;requester_id:string;subject:string;message:string;status:string;priority:string;created_at:string}>>([]);
   const [buyerReviews,setBuyerReviews]=useState<Array<{id:string;product_id:string;rating:number;review_text:string;status:string;created_at:string}>>([]);
   const [financeBusy,setFinanceBusy]=useState(false);
-  const [paidOrders,setPaidOrders]=useState<Array<{id:string;total_amount:number;currency:string;created_at:string}>>([]);
+  const [paidOrders,setPaidOrders]=useState<Array<{id:string;provider:string;status:string;total_amount:number;currency:string;created_at:string}>>([]);
   const [platformRevenue,setPlatformRevenue]=useState<Array<{id:string;amount:number;currency:string;entry_type:string;created_at:string}>>([]);
   const [attributions,setAttributions]=useState<Array<{id:string;campaign_source:string|null;campaign_medium:string|null;campaign_name:string|null;product_id:string|null;purchase_id:string|null;created_at:string}>>([]);
   const [loading,setLoading]=useState(true);
@@ -54,7 +54,7 @@ function AdminPage() {
         supabase.from("payout_accounts").select("id,user_id,account_label,provider_account_ref,status").eq("status","pending").order("created_at",{ascending:true}),
         supabase.from("support_tickets").select("id,requester_id,subject,message,status,priority,created_at").in("status",["open","in_progress"]).order("created_at",{ascending:true}),
         supabase.from("product_reviews").select("id,product_id,rating,review_text,status,created_at").eq("status","pending").order("created_at",{ascending:true}),
-        supabase.from("purchases").select("id,total_amount,currency,created_at").eq("status","paid").order("created_at",{ascending:false}).limit(500),
+        supabase.from("purchases").select("id,provider,status,total_amount,currency,created_at").in("status",["paid","refund_pending","refunded"]).order("created_at",{ascending:false}).limit(500),
         supabase.from("platform_revenue_entries").select("id,amount,currency,entry_type,created_at").order("created_at",{ascending:false}).limit(500),
         supabase.from("campaign_attributions").select("id,campaign_source,campaign_medium,campaign_name,product_id,purchase_id,created_at").order("created_at",{ascending:false}).limit(100)
       ]);
@@ -103,6 +103,19 @@ function AdminPage() {
       setNotice(role==="admin"&&decision==="approved"?"Product approved and published.":"Review decision saved. An administrator must complete publication if required.");
       await load();
     }catch(e){setError(e instanceof Error?e.message:"Could not save review decision.");}
+  }
+
+  async function refundPurchase(purchaseId:string){
+    if(!window.confirm("Issue a full refund through Paystack? The order will remain pending until Paystack confirms the refund webhook."))return;
+    setFinanceBusy(true);setError("");setNotice("");
+    try{
+      const {data,error:invokeError}=await supabase.functions.invoke("marketplace-finance",{body:{action:"request_refund",purchaseId,reason:"Full refund approved by Listingen support."}});
+      if(invokeError)throw new Error(invokeError.message);
+      if(data?.error)throw new Error(data.error);
+      setNotice("Paystack refund request submitted. Creator and platform ledger reversals will occur only after the signed refund webhook.");
+      await load();
+    }catch(e){setError(e instanceof Error?e.message:"Could not request refund.");}
+    finally{setFinanceBusy(false);}
   }
 
   async function updateTicket(ticketId:string,status:"in_progress"|"resolved"|"closed"){
@@ -171,7 +184,8 @@ function AdminPage() {
         {loading?<p className="mt-8 text-sm text-muted-foreground">Loading admin workspace…</p>:!["admin","reviewer"].includes(role)?<div className="mt-8 rounded-xl border border-border p-6"><h2 className="text-xl font-bold">Restricted workspace</h2><p className="mt-2 text-sm text-muted-foreground">This account does not currently have an administrator or reviewer role in Supabase app metadata. Admin access is never granted from a client-side profile field.</p></div>:<>
           {role==="admin"&&<section className="mt-8"><h2 className="text-xl font-bold">Marketplace analytics</h2><div className="mt-4 grid gap-3 sm:grid-cols-3">
             {["USD","NGN","GBP","EUR"].map(currency=>{const gross=paidOrders.filter(o=>o.currency===currency).reduce((sum,o)=>sum+o.total_amount,0);const net=platformRevenue.filter(o=>o.currency===currency).reduce((sum,o)=>sum+o.amount,0);return <div key={currency} className="rounded-xl border border-border bg-card p-4"><p className="text-xs uppercase tracking-wider text-muted-foreground">{currency} volume</p><p className="mt-2 text-2xl font-black">{(gross/100).toFixed(2)}</p><p className="mt-1 text-xs text-muted-foreground">Platform net: {(net/100).toFixed(2)}</p></div>;})}
-          </div><div className="mt-3 rounded-xl border border-border bg-card p-4"><div className="flex items-center justify-between"><h3 className="font-bold">Recent campaign attribution</h3><span className="text-xs text-muted-foreground">{attributions.length} records</span></div>{attributions.length===0?<p className="mt-2 text-sm text-muted-foreground">Campaign attribution will appear when tracked referral links generate purchases or free claims.</p>:<div className="mt-3 space-y-2">{attributions.slice(0,10).map(a=><div key={a.id} className="flex flex-wrap justify-between gap-2 border-t border-border pt-2 text-xs"><span>{a.campaign_source||"referral"} / {a.campaign_medium||"—"} / {a.campaign_name||"—"}</span><span className="text-muted-foreground">{new Date(a.created_at).toLocaleString()}</span></div>)}</div>}</div></section>}
+          </div><div className="mt-3 rounded-xl border border-border bg-card p-4"><div className="flex items-center justify-between"><h3 className="font-bold">Recent orders & refunds</h3><span className="text-xs text-muted-foreground">{paidOrders.length} records</span></div>{paidOrders.length===0?<p className="mt-2 text-sm text-muted-foreground">No paid orders yet.</p>:<div className="mt-3 space-y-2">{paidOrders.slice(0,20).map(order=><div key={order.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2 text-xs"><span>{(order.total_amount/100).toFixed(2)} {order.currency} · {order.provider} · {order.status}</span>{order.status==="paid"&&order.provider==="paystack"&&<button disabled={financeBusy} onClick={()=>void refundPurchase(order.id)} className="rounded border border-destructive/50 px-2 py-1 text-destructive disabled:opacity-50">Issue full refund</button>}</div>)}</div>}</div>
+<div className="mt-3 rounded-xl border border-border bg-card p-4"><div className="flex items-center justify-between"><h3 className="font-bold">Recent campaign attribution</h3><span className="text-xs text-muted-foreground">{attributions.length} records</span></div>{attributions.length===0?<p className="mt-2 text-sm text-muted-foreground">Campaign attribution will appear when tracked referral links generate purchases or free claims.</p>:<div className="mt-3 space-y-2">{attributions.slice(0,10).map(a=><div key={a.id} className="flex flex-wrap justify-between gap-2 border-t border-border pt-2 text-xs"><span>{a.campaign_source||"referral"} / {a.campaign_medium||"—"} / {a.campaign_name||"—"}</span><span className="text-muted-foreground">{new Date(a.created_at).toLocaleString()}</span></div>)}</div>}</div></section>}
           <section className="mt-8"><div className="flex items-center justify-between"><h2 className="text-xl font-bold">Review queue</h2><span className="text-xs text-muted-foreground">{queue.length} awaiting review</span></div>
             {queue.length===0?<p className="mt-4 rounded-xl border border-border p-5 text-sm text-muted-foreground">The review queue is clear.</p>:<div className="mt-4 space-y-4">{queue.map(item=><article key={item.id} className="rounded-xl border border-border bg-card p-5">
               <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-bold">{item.marketplace_products?.title??"Untitled product"}</h3><p className="mt-1 text-xs text-muted-foreground">Submitted {new Date(item.submitted_at).toLocaleString()} · {item.status}</p></div><Link to="/product/$slug" params={{slug:item.marketplace_products?.slug??""}} className="text-sm text-primary underline">Open listing</Link></div>
