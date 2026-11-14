@@ -28,6 +28,11 @@ function AdminPage() {
   const [paidOrders,setPaidOrders]=useState<Array<{id:string;provider:string;status:string;total_amount:number;currency:string;created_at:string}>>([]);
   const [platformRevenue,setPlatformRevenue]=useState<Array<{id:string;amount:number;currency:string;entry_type:string;created_at:string}>>([]);
   const [attributions,setAttributions]=useState<Array<{id:string;campaign_source:string|null;campaign_medium:string|null;campaign_name:string|null;product_id:string|null;purchase_id:string|null;created_at:string}>>([]);
+  const [appConfig,setAppConfig]=useState<Array<{key:string;value:unknown;is_public:boolean;updated_at:string}>>([]);
+  const [configDrafts,setConfigDrafts]=useState<Record<string,string>>({});
+  const [newConfigKey,setNewConfigKey]=useState("");
+  const [newConfigValue,setNewConfigValue]=useState('""');
+  const [newConfigPublic,setNewConfigPublic]=useState(true);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
@@ -47,7 +52,7 @@ function AdminPage() {
       const currentRole=String(data.user.app_metadata?.role??"");
       setRole(currentRole);
       if(!["admin","reviewer"].includes(currentRole)){setLoading(false);return;}
-      const [q,r,p,accounts,tickets,reviews,orders,revenue,campaigns]=await Promise.all([
+      const [q,r,p,accounts,tickets,reviews,orders,revenue,campaigns,config]=await Promise.all([
         supabase.from("review_submissions").select("id,product_id,version_id,submitted_by,status,submitted_at,quality_score,completeness_report,originality_report,compliance_report,reproducibility_report,marketplace_products(title,slug),product_versions(prompt_content,verification_state,verification_evidence)").in("status",["pending","in_progress"]).order("submitted_at",{ascending:true}),
         supabase.from("commission_rules").select("id,name,currency,platform_fee_bps,creator_share_bps,is_active").order("created_at",{ascending:false}),
         supabase.from("payout_requests").select("id,user_id,amount,currency,status,requested_at,provider_transfer_ref,payout_accounts(id,account_label,provider_account_ref,status)").in("status",["requested","processing","failed"]).order("requested_at",{ascending:true}),
@@ -56,13 +61,15 @@ function AdminPage() {
         supabase.from("product_reviews").select("id,product_id,rating,review_text,status,created_at").eq("status","pending").order("created_at",{ascending:true}),
         supabase.from("purchases").select("id,provider,status,total_amount,currency,created_at").in("status",["paid","refund_pending","refunded"]).order("created_at",{ascending:false}).limit(500),
         supabase.from("platform_revenue_entries").select("id,amount,currency,entry_type,created_at").order("created_at",{ascending:false}).limit(500),
-        supabase.from("campaign_attributions").select("id,campaign_source,campaign_medium,campaign_name,product_id,purchase_id,created_at").order("created_at",{ascending:false}).limit(100)
+        supabase.from("campaign_attributions").select("id,campaign_source,campaign_medium,campaign_name,product_id,purchase_id,created_at").order("created_at",{ascending:false}).limit(100),
+        supabase.from("app_config").select("key,value,is_public,updated_at").order("key",{ascending:true})
       ]);
-      if(q.error)throw q.error;if(r.error)throw r.error;if(p.error)throw p.error;if(accounts.error)throw accounts.error;if(tickets.error)throw tickets.error;if(reviews.error)throw reviews.error;if(orders.error)throw orders.error;if(revenue.error)throw revenue.error;if(campaigns.error)throw campaigns.error;
+      if(q.error)throw q.error;if(r.error)throw r.error;if(p.error)throw p.error;if(accounts.error)throw accounts.error;if(tickets.error)throw tickets.error;if(reviews.error)throw reviews.error;if(orders.error)throw orders.error;if(revenue.error)throw revenue.error;if(campaigns.error)throw campaigns.error;if(config.error)throw config.error;
       setQueue((q.data??[]) as unknown as QueueItem[]);setRules(r.data??[]);
       setPayoutQueue((p.data??[]) as unknown as typeof payoutQueue);setPendingAccounts(accounts.data??[]);
       setSupportTickets(tickets.data??[]);setBuyerReviews(reviews.data??[]);
       setPaidOrders(orders.data??[]);setPlatformRevenue(revenue.data??[]);setAttributions(campaigns.data??[]);
+      setAppConfig(config.data??[]);setConfigDrafts(Object.fromEntries((config.data??[]).map(row=>[row.key,JSON.stringify(row.value,null,2)])));
     }catch(e){setError(e instanceof Error?e.message:"Unable to load admin workspace.");}
     finally{setLoading(false);}
   }
@@ -154,6 +161,24 @@ function AdminPage() {
     finally{setFinanceBusy(false);}
   }
 
+  async function saveConfig(key:string,valueText:string,isPublic:boolean){
+    setError("");setNotice("");
+    try{
+      const parsed=JSON.parse(valueText);
+      const {data}=await supabase.auth.getUser();if(!data.user)throw new Error("Sign in to continue.");
+      const {error:saveError}=await supabase.from("app_config").upsert({key,value:parsed,is_public:isPublic,updated_by:data.user.id});
+      if(saveError)throw saveError;
+      setNotice(`Configuration “${key}” saved.`);await load();
+    }catch(e){setError(e instanceof Error?e.message:"Configuration value must be valid JSON.");}
+  }
+
+  async function createConfig(event:React.FormEvent<HTMLFormElement>){
+    event.preventDefault();
+    if(!/^[a-z0-9_.-]{2,80}$/.test(newConfigKey)){setError("Use a 2–80 character lowercase key with letters, numbers, dots, underscores or hyphens.");return;}
+    await saveConfig(newConfigKey,newConfigValue,newConfigPublic);
+    setNewConfigKey("");setNewConfigValue('""');
+  }
+
   async function saveCommission(event:React.FormEvent<HTMLFormElement>){
     event.preventDefault();setError("");setNotice("");
     const fee=Number(platformPercent);
@@ -202,6 +227,10 @@ function AdminPage() {
               <div className="mt-4 flex flex-wrap gap-2"><button onClick={()=>void review(item,"approved")} className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground">Approve{role==="admin"?" & publish":""}</button><button onClick={()=>void review(item,"changes_requested")} className="rounded-lg border border-border px-3 py-2 text-sm">Request changes</button><button onClick={()=>void review(item,"rejected")} className="rounded-lg border border-destructive/50 px-3 py-2 text-sm text-destructive">Reject</button></div>
             </article>)}</div>}
           </section>
+          {role==="admin"&&<section className="mt-10"><h2 className="text-xl font-bold">Platform configuration</h2><p className="mt-1 text-sm text-muted-foreground">Manage JSON configuration values without changing application code. Never store API secrets here.</p>
+            <form onSubmit={createConfig} className="mt-4 grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-[1fr_1.5fr_auto]"><label className="block text-sm font-medium">Key<input value={newConfigKey} onChange={e=>setNewConfigKey(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" placeholder="homepage.hero.title" /></label><label className="block text-sm font-medium">JSON value<textarea value={newConfigValue} onChange={e=>setNewConfigValue(e.target.value)} className="mt-1 min-h-16 w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-xs" /></label><div className="flex flex-col justify-end gap-2"><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={newConfigPublic} onChange={e=>setNewConfigPublic(e.target.checked)} /> Public</label><button className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground">Add / save key</button></div></form>
+            <div className="mt-4 space-y-3">{appConfig.map(row=><div key={row.key} className="rounded-xl border border-border bg-card p-4"><div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-sm">{row.key}</strong><span className="text-xs text-muted-foreground">{row.is_public?"Public":"Admin only"}</span></div><textarea value={configDrafts[row.key]??""} onChange={e=>setConfigDrafts(v=>({...v,[row.key]:e.target.value}))} className="mt-3 min-h-20 w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-xs" /><button onClick={()=>void saveConfig(row.key,configDrafts[row.key]??"null",row.is_public)} className="mt-2 rounded-lg border border-primary px-3 py-2 text-xs font-semibold text-primary">Save JSON</button></div>)}</div>
+          </section>}
           {role==="admin"&&<section className="mt-10"><h2 className="text-xl font-bold">Customer support & review moderation</h2>
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
               <div className="rounded-xl border border-border bg-card p-5"><h3 className="font-bold">Open support tickets</h3>{supportTickets.length===0?<p className="mt-3 text-sm text-muted-foreground">No open tickets.</p>:<div className="mt-3 space-y-3">{supportTickets.map(ticket=><div key={ticket.id} className="rounded-lg border border-border p-3"><div className="flex justify-between gap-2"><strong className="text-sm">{ticket.subject}</strong><span className="text-xs text-muted-foreground">{ticket.priority}</span></div><p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{ticket.message}</p><div className="mt-3 flex flex-wrap gap-2"><button onClick={()=>void updateTicket(ticket.id,"in_progress")} className="rounded border border-border px-2 py-1 text-xs">In progress</button><button onClick={()=>void updateTicket(ticket.id,"resolved")} className="rounded border border-primary px-2 py-1 text-xs text-primary">Resolve</button><button onClick={()=>void updateTicket(ticket.id,"closed")} className="rounded border border-border px-2 py-1 text-xs">Close</button></div></div>)}</div>}</div>
