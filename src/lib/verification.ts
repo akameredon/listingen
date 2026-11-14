@@ -79,18 +79,22 @@ export function assessPromptPackage(input: PromptAssessmentInput): PromptAssessm
     const candidate = raw.replace(/[.,;!?]+$/, "");
     try {
       const url = new URL(candidate);
-      const host = url.hostname.toLowerCase();
+      const host = url.hostname.toLowerCase().replace(/\.$/, "");
+      // IP literals are deliberately rejected here. This is a source-link
+      // syntax check, not a network fetcher, and rejecting literals avoids
+      // accidentally accepting private, loopback, link-local or mapped IPs.
+      const ipLiteral = host.startsWith("[") || /^\d+(?:\.\d+){0,3}$/.test(host);
       const privateHost =
+        ipLiteral ||
         host === "localhost" ||
+        host.endsWith(".localhost") ||
         host.endsWith(".local") ||
+        host.endsWith(".internal") ||
+        host.endsWith(".lan") ||
+        host.endsWith(".home.arpa") ||
+        host.endsWith(".test") ||
         host === "metadata.google.internal" ||
-        /^127\./.test(host) ||
-        /^10\./.test(host) ||
-        /^192\.168\./.test(host) ||
-        /^169\.254\./.test(host) ||
-        /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
-        host === "0.0.0.0" ||
-        host === "::1";
+        !host.includes(".");
       const valid =
         (url.protocol === "https:" || url.protocol === "http:") &&
         !url.username &&
@@ -100,7 +104,7 @@ export function assessPromptPackage(input: PromptAssessmentInput): PromptAssessm
         url: candidate,
         valid,
         reason: !valid
-          ? "Unsupported scheme, credentials or private/local host."
+          ? "Unsupported scheme, credentials, IP literal or private/local host."
           : url.protocol === "http:"
             ? "Valid URL syntax; HTTPS is preferred."
             : "Valid HTTPS URL syntax; network reachability not checked.",
