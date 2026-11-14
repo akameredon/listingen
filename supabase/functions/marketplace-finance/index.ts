@@ -35,6 +35,21 @@ async function authenticatedUser(req: Request) {
   return error ? null : data.user;
 }
 
+async function recordAttribution(db: ReturnType<typeof serviceClient>, body: Record<string, unknown>, productId: string, purchaseId: string) {
+  const code = typeof body.referralCode === "string" ? body.referralCode.trim().slice(0,80) : "";
+  if (!code) return;
+  const { data: referral } = await db.from("referral_codes").select("id").eq("code",code).eq("is_active",true).maybeSingle();
+  if (!referral) return;
+  const { error } = await db.from("campaign_attributions").insert({
+    referral_code_id: referral.id, product_id: productId, purchase_id: purchaseId,
+    campaign_source: typeof body.utmSource === "string" ? body.utmSource.slice(0,120) : null,
+    campaign_medium: typeof body.utmMedium === "string" ? body.utmMedium.slice(0,120) : null,
+    campaign_name: typeof body.utmCampaign === "string" ? body.utmCampaign.slice(0,160) : null,
+    landing_path: typeof body.landingPath === "string" ? body.landingPath.slice(0,300) : null,
+  });
+  if (error) console.error("attribution_write_failed", error.message);
+}
+
 async function initializeCheckout(req: Request, body: Record<string, unknown>, user: { id: string; email?: string }) {
   const secret = Deno.env.get("PAYSTACK_SECRET_KEY");
   const configuredSite = Deno.env.get("LISTINGEN_SITE_URL");
@@ -79,6 +94,7 @@ async function initializeCheckout(req: Request, body: Record<string, unknown>, u
     await db.from("purchases").update({ status: "failed" }).eq("id", purchase.id);
     return reply(req, { error: "Could not create purchase item." }, 500);
   }
+  await recordAttribution(db, body, product.id, purchase.id);
   const response = await fetch("https://api.paystack.co/transaction/initialize", {
     method: "POST",
     headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
@@ -109,6 +125,7 @@ async function claimFree(req: Request, body: Record<string, unknown>, user: { id
   if (purchaseError || !purchase) return reply(req, { error: "Could not record free product claim." }, 500);
   const { error: itemError } = await db.from("purchase_items").insert({purchase_id:purchase.id,product_id:product.id,version_id:product.current_version_id,creator_id:product.creator_id,product_title_snapshot:product.title,unit_amount:0,creator_amount:0,platform_amount:0,currency:product.currency});
   if (itemError) { await db.from("purchases").update({status:"failed"}).eq("id",purchase.id); return reply(req,{error:"Could not deliver free product."},500); }
+  await recordAttribution(db, body, product.id, purchase.id);
   return reply(req,{purchase_id:purchase.id,reference,status:"paid"});
 }
 
