@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";\nimport { streamListing } from "@/lib/listing-client";\nimport { saveListing } from "@/lib/marketplace-client";
 import { Check, Copy, Loader2, Sparkles, ArrowLeft, ArrowRight, RotateCcw } from "lucide-react";
 import {
   STEPS,
