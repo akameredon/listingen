@@ -120,21 +120,50 @@ async function requestPayout(req: Request, body: Record<string, unknown>, user: 
     return reply(req, { error: "Enter a valid payout amount, currency and verified payout account." }, 400);
   }
   const db = serviceClient();
-  const { data: account, error: accountError } = await db.from("payout_accounts")
-    .select("id,status,provider").eq("id", payoutAccountId).eq("user_id", user.id).single();
-  if (accountError || !account || account.status !== "verified" || account.provider !== "paystack") {
-    return reply(req, { error: "Choose a verified Paystack payout account." }, 409);
+  const { data, error } = await db.rpc("request_creator_payout", {
+    p_user_id: user.id,
+    p_payout_account_id: payoutAccountId,
+    p_amount: amount,
+    p_currency: currency,
+  });
+  if (error) return reply(req, { error: error.message.includes("exceeds available") ? error.message : "Could not reserve this payout request. Check your verified account and available balance." }, 409);
+  const payout = Array.isArray(data) ? data[0] : data;
+  return reply(req, { payout, available_balance: payout?.available_balance ?? 0 });
+}
+
+async function verifyPayoutAccount(req: Request, body: Record<string, unknown>, user: { id: string; app_metadata?: Record<string, unknown> }) {
+  if (user.app_metadata?.role !== "admin") return reply(req, { error: "Administrator access is required." }, 403);
+  const secret = Deno.env.get("PAYSTACK_SECRET_KEY");
+  if (!secret) return reply(req, { error: "Paystack recipient verification is not configured." }, 503);
+  const accountId = typeof body.accountId === "string" ? body.accountId : "";
+  if (!accountId) return reply(req, { error: "A payout account is required." }, 400);
+  const db = serviceClient();
+  const { data: account, error } = await db.from("payout_accounts")
+    .select("id,provider,provider_account_ref,status,metadata").eq("id", accountId).single();
+  if (error || !account || account.provider !== "paystack" || !account.provider_account_ref) {
+    return reply(req, { error: "Paystack recipient reference was not found." }, 404);
   }
-  const { data: entries, error: ledgerError } = await db.from("ledger_entries")
-    .select("amount,currency").eq("user_id", user.id).eq("currency", currency);
-  if (ledgerError) return reply(req, { error: "Could not verify your available earnings." }, 500);
-  const available = (entries ?? []).reduce((sum, entry) => sum + Number(entry.amount), 0);
-  if (amount > available) return reply(req, { error: "The requested payout exceeds your available earnings balance." }, 409);
-  const { data: payout, error: payoutError } = await db.from("payout_requests").insert({
-    user_id: user.id, payout_account_id: payoutAccountId, amount, currency, status: "requested",
-  }).select("id,status,amount,currency,requested_at").single();
-  if (payoutError) return reply(req, { error: "Could not create payout request." }, 500);
-  return reply(req, { payout, available_balance: available - amount });
+  const response = await fetch(`https://api.paystack.co/transferrecipient/${encodeURIComponent(account.provider_account_ref)}`, {
+    headers: { Authorization: `Bearer ${secret}` },
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !result?.status || !result?.data) {
+    return reply(req, { error: result?.message ?? "Paystack could not verify this recipient." }, 409);
+  }
+  const details = result.data.details ?? {};
+  const accountNumber = String(details.account_number ?? "");
+  const safeMetadata = {
+    ...(account.metadata ?? {}),
+    verified_at: new Date().toISOString(),
+    recipient_type: result.data.type ?? null,
+    recipient_currency: result.data.currency ?? null,
+    bank_name: details.bank_name ?? null,
+    account_last4: accountNumber.slice(-4) || null,
+  };
+  const { error: updateError } = await db.from("payout_accounts")
+    .update({ status: "verified", metadata: safeMetadata }).eq("id", account.id);
+  if (updateError) return reply(req, { error: "Paystack recipient verified but account status could not be saved." }, 500);
+  return reply(req, { account_id: account.id, status: "verified", bank_name: details.bank_name ?? null, account_last4: accountNumber.slice(-4) || null });
 }
 
 async function executePayout(req: Request, body: Record<string, unknown>, user: { id: string; app_metadata?: Record<string, unknown> }) {
@@ -180,6 +209,7 @@ Deno.serve(async (req: Request) => {
     if (body.action === "initialize_checkout") return await initializeCheckout(req, body, user);
     if (body.action === "claim_free") return await claimFree(req, body, user);
     if (body.action === "request_payout") return await requestPayout(req, body, user);
+    if (body.action === "verify_payout_account") return await verifyPayoutAccount(req, body, user);
     if (body.action === "execute_payout") return await executePayout(req, body, user);
     return reply(req, { error: "Unknown finance action." }, 400);
   } catch (error) {
