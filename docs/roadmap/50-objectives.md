@@ -13,7 +13,7 @@ Statuses are evidence-based: **Complete** means the implementation exists and ha
 7. [x] Enable RLS and explicit API grants; security advisors report no findings.
 8. [x] Create the central app configuration table, admin JSON editor and public homepage configuration.
 9. [~] Add a weekly encrypted backup workflow and restore runbook; actual backup runs await the GitHub database-URL and encryption secrets.
-10. [x] Add CI lint, unit-test and production-build gates; latest commit `0d3ff42` passed all three gates.
+10. [x] Add CI lint, unit-test and production-build gates; latest feature commit `0c80d3e` passed lint, unit tests and production build.
 
 ## Phase 2 — Creator Studio
 
@@ -69,7 +69,8 @@ Statuses are evidence-based: **Complete** means the implementation exists and ha
 
 ## Release gates
 
-- No production launch until CI passes on the release commit and a deployment of that exact commit is verified. The latest feature commit passed GitHub CI; a matching Vercel deployment is pending after the Hobby daily deployment quota resets.
+- No production launch until CI passes on the release commit and a deployment of that exact commit is verified. Feature commit `0c80d3e` passed GitHub CI; Vercel rejected its deployment check with a 24-hour deployment rate limit.
+- Supabase Edge Functions are deployed from the feature branch: `marketplace-finance` version 10 (JWT required) and `paystack-webhook` version 6 (signature-verified webhook, JWT disabled).
 - No payment is marked paid from a browser redirect; only a verified Paystack webhook can settle an order.
 - No creator/platform split is assumed; checkout requires an active admin-configured commission rule.
 - No service-role key is exposed to the browser.
