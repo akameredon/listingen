@@ -1,0 +1,78 @@
+# Listingen — 50-objective delivery tracker
+
+Statuses are evidence-based: **Complete** means the implementation exists and has passed the relevant checks; **Partial** means a working foundation exists but acceptance criteria remain; **Blocked** means an external credential, authorization or legacy-data source is required.
+
+## Phase 1 — Infrastructure and foundation
+
+1. [x] Connect the repository and application configuration to the new Sleekblue Supabase project.
+2. [~] Configure environment variables. Supabase public values are configured in Vercel; AI and Paystack secrets and a canonical production origin remain outstanding. The current Vercel Hobby daily deployment quota also prevented a fresh preview build of the latest commit.
+3. [~] Audit the existing schema and preserve the legacy `listings` model. The old Lovable-managed records have not been migrated because that backend is not available in this Supabase workspace.
+4. [x] Establish versioned SQL migrations aligned with the remote migration history.
+5. [~] Establish buyer, creator, reviewer and administrator authorization using Supabase Auth `app_metadata`; first administrator provisioning remains outstanding.
+6. [x] Implement email registration, sign-in and password recovery.
+7. [x] Enable RLS and explicit API grants; security advisors report no findings.
+8. [x] Create the central app configuration table, admin JSON editor and public homepage configuration.
+9. [~] Add a weekly encrypted backup workflow and restore runbook; actual backup runs await the GitHub database-URL and encryption secrets.
+10. [x] Add CI lint, unit-test and production-build gates; latest feature commit `0c80d3e` passed lint, unit tests and production build.
+
+## Phase 2 — Creator Studio
+
+11. [x] Creator registration and onboarding.
+12. [x] Public creator profiles and storefront pages.
+13. [x] Creator dashboard with prompt, product and earnings views.
+14. [x] Unified saved prompt library.
+15. [x] Save, edit, duplicate, tag and organize prompt drafts into creator folders.
+16. [x] Immutable product version history and resubmission.
+17. [~] Add category-specific image, video, coding/automation, marketing, research and productivity generation guidance to the standard generator; dedicated standalone generator interfaces and further domain-specific experiences remain.
+18. [x] Preserve the ordinary prompt generator.
+19. [~] Apps & Games produces structured marketplace-ready prompt packages; it does not build and host the apps or games themselves.
+20. [x] Convert saved generated prompt packages into marketplace product drafts.
+
+## Phase 3 — Prompt Intelligence and verification
+
+21. [x] Add automated quality scoring.
+22. [x] Check required fields, prompt length, placeholders and step-by-step instructions.
+23. [~] Add exact and similarity-based duplicate triage against up to 100 visible catalog records; broader plagiarism detection remains.
+24. [~] Add policy-risk keyword screening and human moderation; this is triage, not legal determination.
+25. [~] Validate URL syntax and reject IP literals, private/local DNS suffixes and credential-bearing URLs; live reachability and tool/service status checks remain.
+26. [x] Check required inputs, placeholders and usage instructions.
+27. [~] Add evidence-backed manual verification runs and database guards; isolated execution and repeatable sandbox runs remain.
+28. [x] Explicitly distinguish documented, tested and reproduced states.
+29. [x] Add reviewer/admin approval, rejection and change-request workflow.
+30. [x] Store quality, completeness, originality, compliance and reproducibility reports per submission.
+
+## Phase 4 — Marketplace and buyer experience
+
+31. [x] Public marketplace discovery page.
+32. [x] Category taxonomy and category filtering.
+33. [x] Product detail pages with preview and verification disclosures.
+34. [x] Creator-set pricing, compare-at pricing and scheduled discount windows.
+35. [x] Search, category filtering and working newest/price/title sorting; the selected sort is applied to the displayed result set.
+36. [x] Draft, review, approval and publication states.
+37. [~] Paystack checkout initialization is implemented in a server-side Edge Function; live checkout is blocked until Paystack secrets and an active commission rule are configured.
+38. [x] Secure prompt delivery only after a verified paid order or free claim.
+39. [x] Verified-purchase review submission and administrator moderation.
+40. [~] Purchase history, support tickets and full-refund workflow are implemented; live payment/refund verification awaits Paystack configuration. Partial refunds remain manual.
+
+## Phase 5 — Revenue, administration and growth
+
+41. [x] Configurable commission rules with per-transaction snapshots; no percentage is hardcoded.
+42. [x] Creator ledger and separate platform revenue ledger with idempotent webhook processing.
+43. [~] Earnings history, available-balance calculation and atomic payout requests exist; live settlement awaits verified Paystack recipients and credentials.
+44. [~] Paystack recipient verification and transfer initiation are implemented; provider credentials and webhook setup remain outstanding.
+45. [~] Admin Command Centre includes review, commissions, payout operations, support, moderation, analytics, app configuration and user-role management; initial administrator provisioning remains.
+46. [~] Review moderation, support/dispute intake and full refunds exist; partial refunds and a complete dispute evidence workflow remain.
+47. [x] Generate copy-ready social captions and share links for published products.
+48. [~] Referral codes, tracked product links, UTM capture, purchase attribution and dynamic product/creator metadata exist; full affiliate commissions and campaign automation remain.
+49. [x] Basic paid-sales, platform-revenue and campaign-attribution analytics.
+50. [~] Creator referral and sharing tools exist; automated acquisition, retention and growth experiments remain.
+
+## Release gates
+
+- No production launch until CI passes on the release commit and a deployment of that exact commit is verified. Feature commit `0c80d3e` passed GitHub CI; Vercel rejected its deployment check with a 24-hour deployment rate limit.
+- Supabase Edge Functions are deployed from the feature branch: `marketplace-finance` version 10 (JWT required) and `paystack-webhook` version 6 (signature-verified webhook, JWT disabled).
+- No payment is marked paid from a browser redirect; only a verified Paystack webhook can settle an order.
+- No creator/platform split is assumed; checkout requires an active admin-configured commission rule.
+- No service-role key is exposed to the browser.
+- No legacy data is overwritten; migrate and reconcile the old Lovable-managed records before decommissioning that backend.
+- Rotate credentials previously committed in the public repository's historical `.env` file. Deleting the file from the current branch does not remove it from Git history.

@@ -1,0 +1,72 @@
+name: Encrypted Supabase backup
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: listingen-supabase-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check required secrets
+        shell: bash
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: |
+          test -n "$SUPABASE_DB_URL" || { echo "::error::SUPABASE_DB_URL secret is missing"; exit 1; }
+          test -n "$BACKUP_ENCRYPTION_KEY" || { echo "::error::BACKUP_ENCRYPTION_KEY secret is missing"; exit 1; }
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client gnupg
+
+      - name: Create and verify database dump
+        shell: bash
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          umask 077
+          pg_dump --no-owner --no-privileges --format=custom --file=listingen.dump "$SUPABASE_DB_URL"
+          pg_restore --list listingen.dump >/dev/null
+          test -s listingen.dump
+
+      - name: Encrypt backup
+        shell: bash
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$BACKUP_ENCRYPTION_KEY" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --symmetric --cipher-algo AES256 --output listingen.dump.gpg listingen.dump
+          rm -f listingen.dump
+          test -s listingen.dump.gpg
+
+      - name: Verify encrypted backup can be decrypted and restored
+        shell: bash
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$BACKUP_ENCRYPTION_KEY" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --decrypt --output restore-check.dump listingen.dump.gpg
+          pg_restore --list restore-check.dump >/dev/null
+          test -s restore-check.dump
+          rm -f restore-check.dump
+
+      - name: Store encrypted backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: listingen-supabase-backup-${{ github.run_id }}
+          path: listingen.dump.gpg
+          if-no-files-found: error
+          retention-days: 30

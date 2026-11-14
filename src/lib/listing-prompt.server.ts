@@ -49,6 +49,34 @@ One "- [x] Rule name" line per approval rule above, each followed by a line star
 
 No extra sections, no preamble, no closing remarks.`;
 
+export function getSpecialistGuidance(v: ListingInput): string {
+  const niche = v.niche === "Other" ? v.niche_other : v.niche;
+  const output = v.output_type.toLowerCase();
+  const guidance: string[] = [];
+  if (/image|illustration|photo|graphic|design|logo/i.test(niche + " " + output)) {
+    guidance.push("IMAGE & VISUAL SPECIALIST: Define subject, composition, camera or render perspective, lighting, medium, materials, palette, background, aspect ratio and model-specific parameters where supported. Keep style controls consistent while making subject variables explicit. For logos, require legibility, scalable vector-friendly geometry and monochrome suitability. Never claim an image was generated.");
+  }
+  if (/video|film|content creation/i.test(niche + " " + output)) {
+    guidance.push("VIDEO SPECIALIST: Specify duration, aspect ratio, shot sequence, camera movement, subject continuity, transitions, lighting, sound/dialogue treatment, pacing and final frame. Separate global style from per-shot variables. Do not promise unsupported model controls.");
+  }
+  if (/code|programming|software|automation|workflow|gaming/i.test(niche + " " + output)) {
+    guidance.push("CODE & AUTOMATION SPECIALIST: Define runtime/platform, inputs and outputs, prerequisites, dependencies, file or module boundaries, error handling, security boundaries, test cases and acceptance criteria. Require the target model to inspect existing project instructions and preserve user data. Never invent successful execution.");
+  }
+  if (/marketing|business|copywriting|seo/i.test(niche + " " + output)) {
+    guidance.push("MARKETING SPECIALIST: Identify audience, offer, funnel stage, channel, proof available, brand voice, CTA and measurable objective. Distinguish supplied facts from assumptions, avoid fabricated testimonials/statistics and do not promise rankings, conversions or revenue.");
+  }
+  if (/academic|education|research/i.test(niche + " " + output)) {
+    guidance.push("RESEARCH & EDUCATION SPECIALIST: Define research question, scope, audience/level, method, evidence standard, citation requirements and output structure. Never invent sources, quotations, data or findings; label uncertainty and distinguish evidence from interpretation.");
+  }
+  if (/productivity|workflow|management/i.test(niche + " " + output)) {
+    guidance.push("PRODUCTIVITY SPECIALIST: Define trigger, required inputs, ordered steps, decision branches, outputs, owner, exception handling and completion criteria. Prefer reusable checklists and explicit handoffs; state which steps require human approval.");
+  }
+  if (!guidance.length) {
+    guidance.push("DOMAIN SPECIALIST: Tailor the prompt to the stated niche and output format. Define domain-specific inputs, constraints, quality criteria, failure cases and a practical way for the buyer to evaluate the result. Avoid generic filler and unsupported capability claims.");
+  }
+  return guidance.join("\n");
+}
+
 export function buildUserMessage(v: ListingInput, revise?: { previous: string; fixes: string[] }): string {
   const niche = v.niche === "Other" ? v.niche_other || "Other" : v.niche;
   const model = v.target_model === "Other" ? v.target_model_other || "Other" : v.target_model;
@@ -68,10 +96,9 @@ export function buildUserMessage(v: ListingInput, revise?: { previous: string; f
     line("competitor_notes", v.competitor_notes),
     line("avoid_topics", v.avoid_topics),
   ].join("\n");
-  if (!revise) return base;
-  return `${base}
-
-A reviewer checked your previous version and found these problems:
+  const specialist = `SPECIALIST GENERATION REQUIREMENTS\n${getSpecialistGuidance(v)}`;
+  if (!revise) return `${base}\n\n${specialist}`;
+  return `${base}\n\n${specialist}\n\nA reviewer checked your previous version and found these problems:
 ${revise.fixes.map((f) => `- ${f}`).join("\n")}
 
 Previous version:
