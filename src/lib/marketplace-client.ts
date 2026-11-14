@@ -37,7 +37,7 @@ export async function requireUser() {
   return data.user;
 }
 
-export async function saveListing(input: ListingInput, output: string) {
+export async function savePromptPackage(input: import("@/integrations/supabase/types").Json, idea: string, output: string) {
   const user = await requireUser();
   const meta = extractMeta(output);
   const { data, error } = await supabase
@@ -45,8 +45,8 @@ export async function saveListing(input: ListingInput, output: string) {
     .insert({
       user_id: user.id,
       title: meta.title,
-      idea: input.core_idea,
-      input: input as unknown as import("@/integrations/supabase/types").Json,
+      idea: idea.slice(0, 2000),
+      input,
       output,
       template: meta.template,
       status: "draft",
@@ -55,6 +55,14 @@ export async function saveListing(input: ListingInput, output: string) {
     .single();
   if (error) throw error;
   return data;
+}
+
+export async function saveListing(input: ListingInput, output: string) {
+  return savePromptPackage(
+    input as unknown as import("@/integrations/supabase/types").Json,
+    input.core_idea,
+    output,
+  );
 }
 
 export async function getMyListings() {
