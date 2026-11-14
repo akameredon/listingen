@@ -17,6 +17,15 @@ function LoginPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  async function goAfterAuth() {
+    const returnTo = new URLSearchParams(window.location.search).get("redirect");
+    if (returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")) {
+      window.location.assign(returnTo);
+      return;
+    }
+    await goAfterAuth();
+  }
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true); setError(""); setMessage("");
