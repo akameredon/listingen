@@ -23,7 +23,11 @@ function CreatorStudio() {
   const [creating,setCreating] = useState<string|null>(null);
   const [price,setPrice] = useState("4.99");
   const [category,setCategory] = useState(categories[0]!);
-  const [shortDescription,setShortDescription] = useState("");\n  const [creatorSlug,setCreatorSlug] = useState("");\n  const [headline,setHeadline] = useState("");\n  const [about,setAbout] = useState("");\n  const [profileSaved,setProfileSaved] = useState(false);
+  const [shortDescription,setShortDescription] = useState("");
+  const [creatorSlug,setCreatorSlug] = useState("");
+  const [headline,setHeadline] = useState("");
+  const [about,setAbout] = useState("");
+  const [profileSaved,setProfileSaved] = useState(false);
 
   async function refresh() {
     setLoading(true); setError("");
