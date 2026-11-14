@@ -22,6 +22,8 @@ function AdminPage() {
   const [rules,setRules]=useState<Array<{id:string;name:string;currency:string;platform_fee_bps:number|null;creator_share_bps:number|null;is_active:boolean}>>([]);
   const [payoutQueue,setPayoutQueue]=useState<Array<{id:string;user_id:string;amount:number;currency:string;status:string;requested_at:string;provider_transfer_ref:string|null;payout_accounts:{id:string;account_label:string|null;provider_account_ref:string|null;status:string}|null}>>([]);
   const [pendingAccounts,setPendingAccounts]=useState<Array<{id:string;user_id:string;account_label:string|null;provider_account_ref:string|null;status:string}>>([]);
+  const [supportTickets,setSupportTickets]=useState<Array<{id:string;requester_id:string;subject:string;message:string;status:string;priority:string;created_at:string}>>([]);
+  const [buyerReviews,setBuyerReviews]=useState<Array<{id:string;product_id:string;rating:number;review_text:string;status:string;created_at:string}>>([]);
   const [financeBusy,setFinanceBusy]=useState(false);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
@@ -42,15 +44,18 @@ function AdminPage() {
       const currentRole=String(data.user.app_metadata?.role??"");
       setRole(currentRole);
       if(!["admin","reviewer"].includes(currentRole)){setLoading(false);return;}
-      const [q,r,p,accounts]=await Promise.all([
+      const [q,r,p,accounts,tickets,reviews]=await Promise.all([
         supabase.from("review_submissions").select("id,product_id,version_id,submitted_by,status,submitted_at,quality_score,completeness_report,originality_report,compliance_report,reproducibility_report,marketplace_products(title,slug),product_versions(prompt_content,verification_state,verification_evidence)").in("status",["pending","in_progress"]).order("submitted_at",{ascending:true}),
         supabase.from("commission_rules").select("id,name,currency,platform_fee_bps,creator_share_bps,is_active").order("created_at",{ascending:false}),
         supabase.from("payout_requests").select("id,user_id,amount,currency,status,requested_at,provider_transfer_ref,payout_accounts(id,account_label,provider_account_ref,status)").in("status",["requested","processing","failed"]).order("requested_at",{ascending:true}),
-        supabase.from("payout_accounts").select("id,user_id,account_label,provider_account_ref,status").eq("status","pending").order("created_at",{ascending:true})
+        supabase.from("payout_accounts").select("id,user_id,account_label,provider_account_ref,status").eq("status","pending").order("created_at",{ascending:true}),
+        supabase.from("support_tickets").select("id,requester_id,subject,message,status,priority,created_at").in("status",["open","in_progress"]).order("created_at",{ascending:true}),
+        supabase.from("product_reviews").select("id,product_id,rating,review_text,status,created_at").eq("status","pending").order("created_at",{ascending:true})
       ]);
-      if(q.error)throw q.error;if(r.error)throw r.error;if(p.error)throw p.error;if(accounts.error)throw accounts.error;
+      if(q.error)throw q.error;if(r.error)throw r.error;if(p.error)throw p.error;if(accounts.error)throw accounts.error;if(tickets.error)throw tickets.error;if(reviews.error)throw reviews.error;
       setQueue((q.data??[]) as unknown as QueueItem[]);setRules(r.data??[]);
       setPayoutQueue((p.data??[]) as unknown as typeof payoutQueue);setPendingAccounts(accounts.data??[]);
+      setSupportTickets(tickets.data??[]);setBuyerReviews(reviews.data??[]);
     }catch(e){setError(e instanceof Error?e.message:"Unable to load admin workspace.");}
     finally{setLoading(false);}
   }
@@ -91,6 +96,18 @@ function AdminPage() {
       setNotice(role==="admin"&&decision==="approved"?"Product approved and published.":"Review decision saved. An administrator must complete publication if required.");
       await load();
     }catch(e){setError(e instanceof Error?e.message:"Could not save review decision.");}
+  }
+
+  async function updateTicket(ticketId:string,status:"in_progress"|"resolved"|"closed"){
+    const {error:updateError}=await supabase.from("support_tickets").update({status}).eq("id",ticketId);
+    if(updateError){setError(updateError.message);return;}
+    setNotice("Support ticket status updated.");await load();
+  }
+
+  async function moderateBuyerReview(reviewId:string,status:"published"|"hidden"){
+    const {error:updateError}=await supabase.from("product_reviews").update({status}).eq("id",reviewId);
+    if(updateError){setError(updateError.message);return;}
+    setNotice(status==="published"?"Buyer review published.":"Buyer review hidden.");await load();
   }
 
   async function verifyAccount(accountId:string){
@@ -161,6 +178,12 @@ function AdminPage() {
               <div className="mt-4 flex flex-wrap gap-2"><button onClick={()=>void review(item,"approved")} className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground">Approve{role==="admin"?" & publish":""}</button><button onClick={()=>void review(item,"changes_requested")} className="rounded-lg border border-border px-3 py-2 text-sm">Request changes</button><button onClick={()=>void review(item,"rejected")} className="rounded-lg border border-destructive/50 px-3 py-2 text-sm text-destructive">Reject</button></div>
             </article>)}</div>}
           </section>
+          {role==="admin"&&<section className="mt-10"><h2 className="text-xl font-bold">Customer support & review moderation</h2>
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div className="rounded-xl border border-border bg-card p-5"><h3 className="font-bold">Open support tickets</h3>{supportTickets.length===0?<p className="mt-3 text-sm text-muted-foreground">No open tickets.</p>:<div className="mt-3 space-y-3">{supportTickets.map(ticket=><div key={ticket.id} className="rounded-lg border border-border p-3"><div className="flex justify-between gap-2"><strong className="text-sm">{ticket.subject}</strong><span className="text-xs text-muted-foreground">{ticket.priority}</span></div><p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{ticket.message}</p><div className="mt-3 flex flex-wrap gap-2"><button onClick={()=>void updateTicket(ticket.id,"in_progress")} className="rounded border border-border px-2 py-1 text-xs">In progress</button><button onClick={()=>void updateTicket(ticket.id,"resolved")} className="rounded border border-primary px-2 py-1 text-xs text-primary">Resolve</button><button onClick={()=>void updateTicket(ticket.id,"closed")} className="rounded border border-border px-2 py-1 text-xs">Close</button></div></div>)}</div>}</div>
+              <div className="rounded-xl border border-border bg-card p-5"><h3 className="font-bold">Pending buyer reviews</h3>{buyerReviews.length===0?<p className="mt-3 text-sm text-muted-foreground">No reviews awaiting moderation.</p>:<div className="mt-3 space-y-3">{buyerReviews.map(review=><div key={review.id} className="rounded-lg border border-border p-3"><p className="text-sm font-semibold">{review.rating}/5 stars</p><p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{review.review_text||"No written comment."}</p><div className="mt-3 flex gap-2"><button onClick={()=>void moderateBuyerReview(review.id,"published")} className="rounded border border-primary px-2 py-1 text-xs text-primary">Publish</button><button onClick={()=>void moderateBuyerReview(review.id,"hidden")} className="rounded border border-border px-2 py-1 text-xs">Hide</button></div></div>)}</div>}</div>
+            </div>
+          </section>}
           {role==="admin"&&<section className="mt-10"><h2 className="text-xl font-bold">Payout operations</h2><p className="mt-1 text-sm text-muted-foreground">Verify recipient references before processing creator payouts. Transfers are initiated only by an administrator and marked paid only after Paystack's signed webhook.</p>
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
               <div className="rounded-xl border border-border bg-card p-5"><h3 className="font-bold">Pending payout accounts</h3>{pendingAccounts.length===0?<p className="mt-3 text-sm text-muted-foreground">No recipient accounts await verification.</p>:<div className="mt-3 space-y-3">{pendingAccounts.map(account=><div key={account.id} className="rounded-lg border border-border p-3"><p className="font-semibold">{account.account_label||"Paystack recipient"}</p><p className="mt-1 break-all text-xs text-muted-foreground">{account.provider_account_ref}</p><button disabled={financeBusy} onClick={()=>void verifyAccount(account.id)} className="mt-3 rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary disabled:opacity-50">Verify with Paystack</button></div>)}</div>}</div>
