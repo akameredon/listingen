@@ -28,6 +28,9 @@ export type ProductRow = {
   tags: string[];
   preview_content: string;
   price_amount: number;
+  compare_at_price_amount: number | null;
+  discount_starts_at: string | null;
+  discount_ends_at: string | null;
   currency: string;
   status: string;
   current_version_id: string | null;
