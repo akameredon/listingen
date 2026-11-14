@@ -16,6 +16,12 @@ function corsHeaders(req: Request) {
 function reply(req: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: corsHeaders(req) });
 }
+async function writeAudit(db: ReturnType<typeof serviceClient>, actorId: string | null, action: string, entityType: string, entityId: string | null, metadata: Record<string, unknown> = {}) {
+  const { error } = await db.from("audit_logs").insert({
+    actor_id: actorId, action, entity_type: entityType, entity_id: entityId, metadata,
+  });
+  if (error) console.error("audit_log_write_failed", error.message);
+}
 function serviceClient() {
   const url = Deno.env.get("SUPABASE_URL");
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -109,6 +115,7 @@ async function initializeCheckout(req: Request, body: Record<string, unknown>, u
     await db.from("purchases").update({ status: "failed" }).eq("id", purchase.id);
     return reply(req, { error: result?.message ?? "Paystack could not initialize checkout." }, 502);
   }
+  await writeAudit(db, user.id, "purchase.checkout_initialized", "purchase", purchase.id, { product_id: product.id, currency: product.currency, amount: total });
   return reply(req, { authorization_url: result.data.authorization_url, reference, purchase_id: purchase.id });
 }
 
@@ -126,6 +133,7 @@ async function claimFree(req: Request, body: Record<string, unknown>, user: { id
   const { error: itemError } = await db.from("purchase_items").insert({purchase_id:purchase.id,product_id:product.id,version_id:product.current_version_id,creator_id:product.creator_id,product_title_snapshot:product.title,unit_amount:0,creator_amount:0,platform_amount:0,currency:product.currency});
   if (itemError) { await db.from("purchases").update({status:"failed"}).eq("id",purchase.id); return reply(req,{error:"Could not deliver free product."},500); }
   await recordAttribution(db, body, product.id, purchase.id);
+  await writeAudit(db, user.id, "purchase.free_claimed", "purchase", purchase.id, { product_id: product.id });
   return reply(req,{purchase_id:purchase.id,reference,status:"paid"});
 }
 
@@ -180,6 +188,7 @@ async function verifyPayoutAccount(req: Request, body: Record<string, unknown>, 
   const { error: updateError } = await db.from("payout_accounts")
     .update({ status: "verified", metadata: safeMetadata }).eq("id", account.id);
   if (updateError) return reply(req, { error: "Paystack recipient verified but account status could not be saved." }, 500);
+  await writeAudit(db, user.id, "payout_account.verified", "payout_account", account.id, { bank_name: details.bank_name ?? null, account_last4: accountNumber.slice(-4) || null });
   return reply(req, { account_id: account.id, status: "verified", bank_name: details.bank_name ?? null, account_last4: accountNumber.slice(-4) || null });
 }
 
@@ -212,6 +221,7 @@ async function setUserRole(req: Request, body: Record<string, unknown>, user: { 
     app_metadata: { ...target.user.app_metadata, role },
   });
   if (updateError) return reply(req, { error: "Could not update user role." }, 500);
+  await writeAudit(db, user.id, "user.role_updated", "auth_user", targetId, { role });
   return reply(req, { user_id: targetId, role });
 }
 
@@ -239,6 +249,7 @@ async function requestRefund(req: Request, body: Record<string, unknown>, user: 
   if (!response.ok || !result?.status) return reply(req, { error: result?.message ?? "Paystack could not initiate the refund." }, 502);
   const { error: updateError } = await db.from("purchases").update({ status: "refund_pending" }).eq("id", purchase.id).eq("status", "paid");
   if (updateError) return reply(req, { error: "Paystack accepted the refund request, but Listingen could not update its order. Reconcile before retrying." }, 500);
+  await writeAudit(db, user.id, "purchase.refund_requested", "purchase", purchase.id, { provider_status: result.data?.status ?? "pending", amount: purchase.total_amount, currency: purchase.currency, reason });
   return reply(req, { purchase_id: purchase.id, status: "refund_pending", provider_status: result.data?.status ?? "pending" });
 }
 
@@ -272,6 +283,7 @@ async function executePayout(req: Request, body: Record<string, unknown>, user: 
     status: "processing", provider_transfer_ref: result.data.transfer_code, admin_note: "Transfer submitted to Paystack.",
   }).eq("id", payout.id);
   if (updateError) return reply(req, { error: "Transfer started but payout record could not be updated; reconcile with Paystack before retrying." }, 500);
+  await writeAudit(db, user.id, "payout.transfer_started", "payout_request", payout.id, { transfer_code: result.data.transfer_code, amount: payout.amount, currency: payout.currency });
   return reply(req, { payout_id: payout.id, status: "processing", transfer_code: result.data.transfer_code });
 }
 
