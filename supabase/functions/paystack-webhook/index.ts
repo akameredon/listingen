@@ -86,6 +86,9 @@ Deno.serve(async (req: Request) => {
       }
     } else if (event === "charge.failed") {
       if (reference) await db.from("purchases").update({ status: "failed" }).eq("provider", "paystack").eq("provider_checkout_id", reference).eq("status", "pending");
+    } else if (event === "refund.failed") {
+      if (!reference) return json({ error: "Missing refund reference." }, 400);
+      await db.from("purchases").update({ status: "paid" }).eq("provider", "paystack").eq("provider_checkout_id", reference).eq("status", "refund_pending");
     } else if (event === "refund.processed") {
       if (!reference) return json({ error: "Missing refund reference." }, 400);
       const { data: purchase, error: purchaseError } = await db.from("purchases")
