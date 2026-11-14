@@ -88,7 +88,7 @@ function ProductPage() {
           </section>
           <aside className="h-fit rounded-xl border border-border bg-card p-5 lg:sticky lg:top-6">
             <p className="text-xs uppercase tracking-wider text-muted-foreground">One-time purchase</p>
-            <p className="mt-2 text-3xl font-black">{product.price_amount===0?"Free":`${(product.price_amount/100).toFixed(2)} ${product.currency}`}</p>
+            <p className="mt-2 text-3xl font-black">{product.price_amount===0?"Free":product.compare_at_price_amount!=null&&(!product.discount_starts_at||new Date(product.discount_starts_at)<=new Date())&&(!product.discount_ends_at||new Date(product.discount_ends_at)>=new Date())?<><span className="mr-2 text-base text-muted-foreground line-through">{(product.compare_at_price_amount/100).toFixed(2)} {product.currency}</span>{(product.price_amount/100).toFixed(2)} {product.currency}</>:`${(product.price_amount/100).toFixed(2)} ${product.currency}`}</p>
             <p className="mt-3 text-sm text-muted-foreground">Secure checkout and automatic delivery will activate when the payment provider and commission policy are configured.</p>
             {checkoutError&&<p role="alert" className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs">{checkoutError}</p>}
             <button disabled={checkoutBusy} onClick={()=>void startCheckout()} className="mt-5 w-full rounded-lg bg-primary px-4 py-3 text-sm font-bold text-primary-foreground disabled:opacity-50">{checkoutBusy?"Preparing…":product.price_amount===0?"Claim free product":"Buy now"}</button>
