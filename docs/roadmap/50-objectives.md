@@ -13,7 +13,7 @@ Statuses are evidence-based: **Complete** means the implementation exists and ha
 7. [x] Enable RLS and explicit API grants; security advisors report no findings.
 8. [x] Create the central app configuration table, admin JSON editor and public homepage configuration.
 9. [~] Add a weekly encrypted backup workflow and restore runbook; actual backup runs await the GitHub database-URL and encryption secrets.
-10. [x] Add CI lint, unit-test and production-build gates; latest feature-branch pipeline passed.
+10. [x] Add CI lint, unit-test and production-build gates; latest commit `0d3ff42` passed all three gates.
 
 ## Phase 2 — Creator Studio
 
@@ -23,7 +23,7 @@ Statuses are evidence-based: **Complete** means the implementation exists and ha
 14. [x] Unified saved prompt library.
 15. [x] Save, edit, duplicate, tag and organize prompt drafts into creator folders.
 16. [x] Immutable product version history and resubmission.
-17. [~] Standard generator categories and Apps & Games generator exist; additional specialist generator experiences remain.
+17. [~] Add category-specific image, video, coding/automation, marketing, research and productivity generation guidance to the standard generator; dedicated standalone generator interfaces and further domain-specific experiences remain.
 18. [x] Preserve the ordinary prompt generator.
 19. [~] Apps & Games produces structured marketplace-ready prompt packages; it does not build and host the apps or games themselves.
 20. [x] Convert saved generated prompt packages into marketplace product drafts.
@@ -34,7 +34,7 @@ Statuses are evidence-based: **Complete** means the implementation exists and ha
 22. [x] Check required fields, prompt length, placeholders and step-by-step instructions.
 23. [~] Add exact and similarity-based duplicate triage against up to 100 visible catalog records; broader plagiarism detection remains.
 24. [~] Add policy-risk keyword screening and human moderation; this is triage, not legal determination.
-25. [~] Validate URL syntax and reject local/private targets; live reachability and tool/service status checks remain.
+25. [~] Validate URL syntax and reject IP literals, private/local DNS suffixes and credential-bearing URLs; live reachability and tool/service status checks remain.
 26. [x] Check required inputs, placeholders and usage instructions.
 27. [~] Add evidence-backed manual verification runs and database guards; isolated execution and repeatable sandbox runs remain.
 28. [x] Explicitly distinguish documented, tested and reproduced states.
@@ -47,7 +47,7 @@ Statuses are evidence-based: **Complete** means the implementation exists and ha
 32. [x] Category taxonomy and category filtering.
 33. [x] Product detail pages with preview and verification disclosures.
 34. [x] Creator-set pricing, compare-at pricing and scheduled discount windows.
-35. [x] Search, category filtering and newest/price/title sorting.
+35. [x] Search, category filtering and working newest/price/title sorting; the selected sort is applied to the displayed result set.
 36. [x] Draft, review, approval and publication states.
 37. [~] Paystack checkout initialization is implemented in a server-side Edge Function; live checkout is blocked until Paystack secrets and an active commission rule are configured.
 38. [x] Secure prompt delivery only after a verified paid order or free claim.
