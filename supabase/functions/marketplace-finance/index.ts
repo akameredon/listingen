@@ -183,6 +183,38 @@ async function verifyPayoutAccount(req: Request, body: Record<string, unknown>, 
   return reply(req, { account_id: account.id, status: "verified", bank_name: details.bank_name ?? null, account_last4: accountNumber.slice(-4) || null });
 }
 
+async function listUsers(req: Request, user: { app_metadata?: Record<string, unknown> }) {
+  if (user.app_metadata?.role !== "admin") return reply(req, { error: "Administrator access is required." }, 403);
+  const db = serviceClient();
+  const { data, error } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (error) return reply(req, { error: "Could not load user directory." }, 500);
+  return reply(req, { users: data.users.map(account => ({
+    id: account.id, email: account.email ?? null, created_at: account.created_at,
+    last_sign_in_at: account.last_sign_in_at ?? null, role: account.app_metadata?.role ?? "buyer",
+  })) });
+}
+
+async function setUserRole(req: Request, body: Record<string, unknown>, user: { id: string; app_metadata?: Record<string, unknown> }) {
+  if (user.app_metadata?.role !== "admin") return reply(req, { error: "Administrator access is required." }, 403);
+  const targetId = typeof body.userId === "string" ? body.userId : "";
+  const role = typeof body.role === "string" ? body.role : "";
+  if (!targetId || !["admin","reviewer","creator","buyer"].includes(role)) return reply(req, { error: "Choose a valid user and role." }, 400);
+  const db = serviceClient();
+  const { data: directory, error: directoryError } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (directoryError) return reply(req, { error: "Could not verify administrator membership." }, 500);
+  const admins = directory.users.filter(account => account.app_metadata?.role === "admin");
+  if (targetId === user.id && role !== "admin" && admins.length <= 1) {
+    return reply(req, { error: "The last administrator cannot remove their own administrator role." }, 409);
+  }
+  const { data: target, error: targetError } = await db.auth.admin.getUserById(targetId);
+  if (targetError || !target.user) return reply(req, { error: "User not found." }, 404);
+  const { error: updateError } = await db.auth.admin.updateUserById(targetId, {
+    app_metadata: { ...target.user.app_metadata, role },
+  });
+  if (updateError) return reply(req, { error: "Could not update user role." }, 500);
+  return reply(req, { user_id: targetId, role });
+}
+
 async function requestRefund(req: Request, body: Record<string, unknown>, user: { id: string; app_metadata?: Record<string, unknown> }) {
   if (user.app_metadata?.role !== "admin") return reply(req, { error: "Administrator access is required." }, 403);
   const secret = Deno.env.get("PAYSTACK_SECRET_KEY");
@@ -254,6 +286,8 @@ Deno.serve(async (req: Request) => {
     if (body.action === "claim_free") return await claimFree(req, body, user);
     if (body.action === "request_payout") return await requestPayout(req, body, user);
     if (body.action === "verify_payout_account") return await verifyPayoutAccount(req, body, user);
+    if (body.action === "list_users") return await listUsers(req, user);
+    if (body.action === "set_user_role") return await setUserRole(req, body, user);
     if (body.action === "request_refund") return await requestRefund(req, body, user);
     if (body.action === "execute_payout") return await executePayout(req, body, user);
     return reply(req, { error: "Unknown finance action." }, 400);
