@@ -32,4 +32,14 @@ describe("assessPromptPackage", () => {
     expect(result.compliance.flags.length).toBeGreaterThan(0);
     expect(result.compliance.disclaimer).toContain("not a legal");
   });
+
+  it("validates source URL syntax and rejects local network targets", () => {
+    const result = assessPromptPackage({
+      ...completePackage,
+      instructions: "1. Open https://example.com/docs. 2. Never request http://127.0.0.1/admin.",
+    });
+    expect(result.sourceValidation.validCount).toBe(1);
+    expect(result.sourceValidation.invalidCount).toBe(1);
+    expect(result.sourceValidation.networkReachabilityChecked).toBe(false);
+  });
 });
