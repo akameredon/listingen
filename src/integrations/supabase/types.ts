@@ -993,6 +993,66 @@ export type Database = {
           },
         ]
       }
+      verification_runs: {
+        Row: {
+          actual_result: string
+          created_at: string
+          evidence_url: string | null
+          expected_result: string
+          id: string
+          logs: string | null
+          product_id: string
+          runner_type: string
+          started_by: string
+          status: string
+          test_input: Json
+          version_id: string
+        }
+        Insert: {
+          actual_result?: string
+          created_at?: string
+          evidence_url?: string | null
+          expected_result?: string
+          id?: string
+          logs?: string | null
+          product_id: string
+          runner_type: string
+          started_by: string
+          status: string
+          test_input?: Json
+          version_id: string
+        }
+        Update: {
+          actual_result?: string
+          created_at?: string
+          evidence_url?: string | null
+          expected_result?: string
+          id?: string
+          logs?: string | null
+          product_id?: string
+          runner_type?: string
+          started_by?: string
+          status?: string
+          test_input?: Json
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "verification_runs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verification_runs_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "product_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
