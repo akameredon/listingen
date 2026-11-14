@@ -23,7 +23,7 @@ function CreatorStudio() {
   const [creating,setCreating] = useState<string|null>(null);
   const [price,setPrice] = useState("4.99");
   const [category,setCategory] = useState(categories[0]!);
-  const [shortDescription,setShortDescription] = useState("");
+  const [shortDescription,setShortDescription] = useState("");\n  const [creatorSlug,setCreatorSlug] = useState("");\n  const [headline,setHeadline] = useState("");\n  const [about,setAbout] = useState("");\n  const [profileSaved,setProfileSaved] = useState(false);
 
   async function refresh() {
     setLoading(true); setError("");
@@ -43,6 +43,21 @@ function CreatorStudio() {
     });
     return () => data.subscription.unsubscribe();
   }, []);
+
+  async function saveCreatorProfile(event:React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();setError("");setNotice("");
+    const slug=creatorSlug.toLowerCase().trim().replace(/[^a-z0-9-]+/g,"-").replace(/^-|-$/g,"");
+    if(slug.length<3){setError("Choose a storefront URL with at least 3 letters or numbers.");return;}
+    try{
+      const {data,error:authError}=await supabase.auth.getUser();
+      if(authError||!data.user)throw new Error("Sign in to continue.");
+      const {error:saveError}=await supabase.from("creator_profiles").upsert({
+        user_id:data.user.id,slug,headline:headline.trim(),about:about.trim(),is_public:true
+      });
+      if(saveError)throw saveError;
+      setCreatorSlug(slug);setProfileSaved(true);setNotice("Your public creator storefront has been saved.");
+    }catch(e){setError(e instanceof Error?e.message:"Could not save creator profile.");}
+  }
 
   async function createProduct(listing: ListingRow) {
     setError(""); setNotice("");
@@ -86,6 +101,16 @@ function CreatorStudio() {
           <div className="rounded-xl border border-border bg-card p-4"><p className="text-xs uppercase tracking-wider text-muted-foreground">Saved prompt drafts</p><p className="mt-2 text-3xl font-black">{listings.length}</p></div>
           <div className="rounded-xl border border-border bg-card p-4"><p className="text-xs uppercase tracking-wider text-muted-foreground">Marketplace products</p><p className="mt-2 text-3xl font-black">{products.length}</p></div>
           <div className="rounded-xl border border-border bg-card p-4"><p className="text-xs uppercase tracking-wider text-muted-foreground">Published · In review</p><p className="mt-2 text-3xl font-black">{published} · {inReview}</p></div>
+        </section>
+
+        <section className="mt-6 rounded-xl border border-border bg-card p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold">Your public creator storefront</h2><p className="mt-1 text-sm text-muted-foreground">Create a profile buyers can visit to discover your published products.</p></div>{profileSaved&&creatorSlug&&<Link to="/creators/$slug" params={{slug:creatorSlug}} className="text-sm font-semibold text-primary underline">View storefront</Link>}</div>
+          <form onSubmit={saveCreatorProfile} className="mt-4 grid gap-3 md:grid-cols-2">
+            <label className="block text-sm font-medium">Storefront URL slug<input value={creatorSlug} onChange={e=>{setCreatorSlug(e.target.value);setProfileSaved(false);}} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" placeholder="your-creator-name" /></label>
+            <label className="block text-sm font-medium">Creator headline<input value={headline} onChange={e=>setHeadline(e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2" placeholder="AI workflow designer and prompt creator" /></label>
+            <label className="block text-sm font-medium md:col-span-2">About your work<textarea value={about} onChange={e=>setAbout(e.target.value)} className="mt-1 min-h-20 w-full rounded-lg border border-input bg-background px-3 py-2" placeholder="Explain what you create and who your products help." /></label>
+            <button className="w-fit rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground">Save storefront profile</button>
+          </form>
         </section>
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-bold">Your prompt library</h2><Link to="/" className="rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground">Create a prompt</Link></div>
