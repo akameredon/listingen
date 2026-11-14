@@ -23,7 +23,7 @@ function LoginPage() {
       window.location.assign(returnTo);
       return;
     }
-    await goAfterAuth();
+    await navigate({ to: "/studio" });
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
