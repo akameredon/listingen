@@ -160,7 +160,7 @@ function CreatorStudio() {
       <div className="mx-auto max-w-6xl">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
           <div><Link to="/" className="font-mono text-xs font-bold uppercase tracking-[0.25em] text-primary">Listingen</Link><h1 className="mt-2 text-3xl font-black">Creator Studio</h1><p className="mt-1 text-sm text-muted-foreground">Turn your saved prompts into products buyers can discover.</p></div>
-          <nav className="flex flex-wrap items-center gap-3 text-sm"><Link to="/marketplace" className="text-muted-foreground hover:text-foreground">Marketplace</Link><button onClick={signOut} className="rounded-lg border border-border px-3 py-2">Sign out</button></nav>
+          <nav className="flex flex-wrap items-center gap-3 text-sm"><Link to="/marketplace" className="text-muted-foreground hover:text-foreground">Marketplace</Link><Link to="/account" className="text-muted-foreground hover:text-foreground">My account</Link><Link to="/admin" className="text-muted-foreground hover:text-foreground">Admin</Link><button onClick={signOut} className="rounded-lg border border-border px-3 py-2">Sign out</button></nav>
         </header>
 
         <section className="mt-6 grid gap-3 sm:grid-cols-3">
